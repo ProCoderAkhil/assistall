@@ -39,7 +39,7 @@ const VolunteerDashboard = ({ user }) => {
   const [gigsList, setGigsList] = useState(initialGigs);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
-  const DEPLOYED_API_URL = `http://${window.location.hostname}:5000`; 
+  const DEPLOYED_API_URL = "https://assistall-server.onrender.com";
 
   const showToast = (msg, type) => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
   const formatTime = (s) => { const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h}h ${m}m`; };
