@@ -11,7 +11,7 @@ const UserDashboard = () => {
   const [tip, setTip] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('online'); // 'online' or 'cash'
 
-  const DEPLOYED_API_URL = `http://${window.location.hostname}:5000`;
+  const DEPLOYED_API_URL = "https://assistall-server.onrender.com";
 
   // --- 1. RAZORPAY LOADER ---
   const loadRazorpayScript = (src) => {
