@@ -7,7 +7,7 @@ const Login = ({ onLogin, onBack, onSignupClick, onVolunteerClick }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ⚠️ FIXED URL: Must be https://assistall-server.onrender.com
+  // ⚠️ CRITICAL FIX: Ensure this points to RENDER, not localhost/vercel
   const API_URL = window.location.hostname === 'localhost' 
       ? 'http://localhost:5000' 
       : 'https://assistall-server.onrender.com'; 
@@ -18,9 +18,6 @@ const Login = ({ onLogin, onBack, onSignupClick, onVolunteerClick }) => {
     setLoading(true);
 
     try {
-      // Log the URL so we can debug if needed
-      console.log("Connecting to:", `${API_URL}/api/auth/login`);
-
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,13 +27,13 @@ const Login = ({ onLogin, onBack, onSignupClick, onVolunteerClick }) => {
       const data = await res.json();
 
       if (res.ok) {
-        onLogin(data.user, data.token); // Success
+        onLogin(data.user, data.token || data.accessToken);
       } else {
         setError(data.message || 'Login failed');
       }
     } catch (err) {
       console.error("Login Error:", err);
-      setError('Connection failed. Server might be crashing or sleeping.');
+      setError('Connection failed. Server might be sleeping (wait 30s).');
     } finally {
       setLoading(false);
     }
@@ -49,15 +46,28 @@ const Login = ({ onLogin, onBack, onSignupClick, onVolunteerClick }) => {
         <h2 className="text-3xl font-black mb-2">Welcome Back</h2>
         <p className="text-neutral-500 mb-8">Enter your credentials to continue.</p>
 
-        {error && <div className="bg-red-900/20 border border-red-500/50 text-red-400 p-4 rounded-xl mb-6 flex items-center gap-3 text-sm font-bold"><AlertCircle size={18} />{error}</div>}
+        {error && <div className="bg-red-900/20 text-red-400 p-4 rounded-xl mb-6 flex gap-3 text-sm font-bold"><AlertCircle size={18} />{error}</div>}
 
         <form onSubmit={handleLogin} className="space-y-4">
-          <div className="relative group"><Mail className="absolute left-4 top-4 text-neutral-500" size={20} /><input type="email" placeholder="Email Address" className="w-full bg-[#1a1a1a] border border-neutral-800 rounded-2xl py-4 pl-12 text-white" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-          <div className="relative group"><Lock className="absolute left-4 top-4 text-neutral-500" size={20} /><input type="password" placeholder="Password" className="w-full bg-[#1a1a1a] border border-neutral-800 rounded-2xl py-4 pl-12 text-white" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
+          <div className="relative group">
+            <Mail className="absolute left-4 top-4 text-neutral-500" size={20} />
+            <input type="email" placeholder="Email Address" className="w-full bg-[#1a1a1a] border border-neutral-800 rounded-2xl py-4 pl-12 text-white" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <div className="relative group">
+            <Lock className="absolute left-4 top-4 text-neutral-500" size={20} />
+            <input type="password" placeholder="Password" className="w-full bg-[#1a1a1a] border border-neutral-800 rounded-2xl py-4 pl-12 text-white" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
           <button type="submit" disabled={loading} className="w-full bg-white text-black font-bold py-4 rounded-2xl mt-4 flex justify-center gap-2">{loading ? <Loader2 className="animate-spin" /> : <>Sign In <ArrowRight size={20} /></>}</button>
         </form>
 
-        <div className="mt-8 text-center"><p className="text-neutral-500 text-sm">Don't have an account?</p><div className="flex justify-center gap-4 mt-2"><button onClick={onSignupClick} className="text-white font-bold hover:underline">User Signup</button><span className="text-neutral-600">|</span><button onClick={onVolunteerClick} className="text-green-500 font-bold hover:underline">Volunteer</button></div></div>
+        <div className="mt-8 text-center">
+            <p className="text-neutral-500 text-sm">Don't have an account?</p>
+            <div className="flex justify-center gap-4 mt-2">
+                <button onClick={onSignupClick} className="text-white font-bold hover:underline">User Signup</button>
+                <span className="text-neutral-600">|</span>
+                <button onClick={onVolunteerClick} className="text-green-500 font-bold hover:underline">Volunteer</button>
+            </div>
+        </div>
       </div>
     </div>
   );

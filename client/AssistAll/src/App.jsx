@@ -32,11 +32,17 @@ const initialNotifs = [
 ];
 
 function App() {
+  // CRASH FIX: Safe LocalStorage Loading
   const [user, setUser] = useState(() => {
       try {
           const saved = localStorage.getItem('user');
-          return (saved && saved !== "undefined") ? JSON.parse(saved) : null;
-      } catch (e) { localStorage.clear(); return null; }
+          if (!saved || saved === "undefined") return null;
+          return JSON.parse(saved);
+      } catch (e) { 
+          console.error("Storage corrupt, clearing...");
+          localStorage.clear(); 
+          return null; 
+      }
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -57,16 +63,18 @@ function App() {
     const interval = setInterval(async () => {
         try {
           const res = await fetch(`${DEPLOYED_API_URL}/api/requests`);
-          const data = await res.json();
-          const myRequest = data.find(r => r._id === activeRequestId);
-          if (myRequest) {
-             if (myRequest.status === 'accepted' && step !== 'found') {
-                setAcceptedRequestData(myRequest); setStep('found'); showToast(`Volunteer Found!`, 'success');
-             } else if (myRequest.status === 'in_progress' && step !== 'in_progress') {
-               setStep('in_progress'); showToast("Ride Started", 'info');
-             } else if (myRequest.status === 'completed' && step !== 'rating') {
-               setStep('rating'); showToast("Ride Completed", 'success');
-             }
+          if(res.ok) {
+              const data = await res.json();
+              const myRequest = data.find(r => r._id === activeRequestId);
+              if (myRequest) {
+                 if (myRequest.status === 'accepted' && step !== 'found') {
+                    setAcceptedRequestData(myRequest); setStep('found'); showToast(`Volunteer Found!`, 'success');
+                 } else if (myRequest.status === 'in_progress' && step !== 'in_progress') {
+                   setStep('in_progress'); showToast("Ride Started", 'info');
+                 } else if (myRequest.status === 'completed' && step !== 'rating') {
+                   setStep('rating'); showToast("Ride Completed", 'success');
+                 }
+              }
           }
         } catch (err) {}
     }, 2000);
@@ -77,6 +85,8 @@ function App() {
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', token);
       setUser(userData);
+      
+      // Auto Redirect based on Role
       if(userData.role === 'volunteer') navigate('/volunteer');
       else if(userData.role === 'admin') navigate('/admin');
       else navigate('/home');

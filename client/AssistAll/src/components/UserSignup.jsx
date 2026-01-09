@@ -26,7 +26,7 @@ const UserSignup = ({ onRegister, onBack }) => {
       const data = await res.json();
 
       if (res.ok) {
-        onRegister(data.user);
+        onRegister(data.user || data);
       } else {
         setError(data.message || 'Registration failed');
       }
