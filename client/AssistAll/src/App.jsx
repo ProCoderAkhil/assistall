@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Menu, Bell, Shield, X } from 'lucide-react';
 
-// Import Components
+// Components
 import BottomNav from './components/BottomNav';
 import MapBackground from './components/MapBackground';
 import ServiceSelector from './components/ServiceSelector';
@@ -22,7 +22,7 @@ import LandingPage from './components/LandingPage';
 import AppLoader from './components/AppLoader'; 
 import SOSModal from './components/SOSModal'; 
 
-// --- FIXED URL (Added .com) ---
+// FIXED URL
 const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
@@ -33,14 +33,16 @@ const initialNotifs = [
 ];
 
 function App() {
-  // --- CRASH FIX: Safe LocalStorage Loading ---
+  // --- CRASH FIX: SAFE STORAGE LOADING ---
   const [user, setUser] = useState(() => {
       try {
           const savedUser = localStorage.getItem('user');
-          return savedUser ? JSON.parse(savedUser) : null;
+          // If "undefined" string is saved, it crashes JSON.parse. This fixes it.
+          if (!savedUser || savedUser === "undefined") return null;
+          return JSON.parse(savedUser);
       } catch (e) {
-          console.error("Storage Error:", e);
-          localStorage.clear(); // Clear corrupt data
+          console.error("Storage corrupted, clearing...", e);
+          localStorage.clear(); // Auto-fix the white screen
           return null;
       }
   });
@@ -193,7 +195,6 @@ function App() {
                         </div>
                     </div>
 
-                    {/* CONTENT STEPS */}
                     {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
                     {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => setStep('selecting')} />}
                     {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}

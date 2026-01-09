@@ -7,7 +7,7 @@ const Login = ({ onLogin, onBack, onSignupClick, onVolunteerClick }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // --- FIXED URL (Added .com) ---
+  // FIXED URL
   const API_URL = window.location.hostname === 'localhost' 
       ? 'http://localhost:5000' 
       : 'https://assistall-server.onrender.com'; 
@@ -45,11 +45,7 @@ const Login = ({ onLogin, onBack, onSignupClick, onVolunteerClick }) => {
         <h2 className="text-3xl font-black mb-2">Welcome Back</h2>
         <p className="text-neutral-500 mb-8">Enter your credentials to continue.</p>
 
-        {error && (
-            <div className="bg-red-900/20 border border-red-500/50 text-red-400 p-4 rounded-xl mb-6 flex items-center gap-3 text-sm font-bold">
-                <AlertCircle size={18} /> {error}
-            </div>
-        )}
+        {error && <div className="bg-red-900/20 text-red-400 p-4 rounded-xl mb-6 flex gap-3 text-sm font-bold"><AlertCircle size={18} />{error}</div>}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="relative group">
