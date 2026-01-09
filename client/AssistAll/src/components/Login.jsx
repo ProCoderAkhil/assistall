@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
-// Props received from App.jsx: onLoginSuccess, onBack, onRegisterClick
-const Login = ({ onLoginSuccess, onBack, onRegisterClick }) => {
+// Props passed from App.jsx: onLogin, onBack, onSignupClick
+const Login = ({ onLogin, onBack, onSignupClick }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,8 +28,8 @@ const Login = ({ onLoginSuccess, onBack, onRegisterClick }) => {
       const data = await res.json();
 
       if (res.ok) {
-        // Pass data back to App.jsx to handle screen switching
-        onLoginSuccess(data.user, data.token);
+        // Send user data back to App.jsx to handle navigation
+        onLogin(data.user, data.token);
       } else {
         setError(data.message || 'Login failed');
       }
@@ -42,7 +42,7 @@ const Login = ({ onLoginSuccess, onBack, onRegisterClick }) => {
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-[#121212] p-8 rounded-3xl border border-neutral-800 shadow-2xl">
+      <div className="w-full max-w-md bg-[#121212] p-8 rounded-3xl border border-neutral-800 shadow-2xl animate-in slide-in-from-bottom duration-500">
         
         <button onClick={onBack} className="mb-6 text-neutral-400 hover:text-white transition">
             &larr; Back
@@ -87,7 +87,7 @@ const Login = ({ onLoginSuccess, onBack, onRegisterClick }) => {
 
         <div className="mt-8 text-center">
             <p className="text-neutral-500 text-sm">Don't have an account?</p>
-            <button onClick={onRegisterClick} className="text-white font-bold mt-2 hover:underline">Create Account</button>
+            <button onClick={onSignupClick} className="text-white font-bold mt-2 hover:underline">Create Account</button>
         </div>
       </div>
     </div>

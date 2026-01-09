@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Bell, Shield, X } from 'lucide-react';
+
+// Import all your components
 import BottomNav from './components/BottomNav';
 import MapBackground from './components/MapBackground';
 import ServiceSelector from './components/ServiceSelector';
@@ -11,14 +14,13 @@ import UserProfile from './components/UserProfile';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import ActivityHistory from './components/ActivityHistory';
 import VolunteerSignup from './components/VolunteerSignup';
-import UserSignup from './components/UserSignup'; // Changed import
+import UserSignup from './components/UserSignup'; 
 import AdminPanel from './components/AdminPanel';
 import RateAndTip from './components/RateAndTip';
 import Toast from './components/Toast';
 import LandingPage from './components/LandingPage'; 
 import AppLoader from './components/AppLoader'; 
 import SOSModal from './components/SOSModal'; 
-import Register from './components/UserSignup';
 
 // SMART URL
 const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
@@ -31,10 +33,8 @@ const initialNotifs = [
 ];
 
 function App() {
-  // --- STATE ---
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
-  const [view, setView] = useState('landing'); // landing, login, register, home, volunteer, admin
-  const [isLoading, setIsLoading] = useState(true); 
+  const [isLoading, setIsLoading] = useState(true);
   
   // V15 FEATURES
   const [showSOS, setShowSOS] = useState(false);
@@ -45,17 +45,17 @@ function App() {
   const [acceptedRequestData, setAcceptedRequestData] = useState(null);
   const [toast, setToast] = useState(null); 
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
 
   useEffect(() => { 
-      const timer = setTimeout(() => {
-          setIsLoading(false);
-          if (user) setView(user.role === 'volunteer' ? 'volunteer' : 'home');
-      }, 1500); 
+      const timer = setTimeout(() => setIsLoading(false), 1500); 
       return () => clearTimeout(timer); 
-  }, [user]);
+  }, []);
 
-  // --- POLLING ---
+  // REAL-TIME STATUS POLLING
   useEffect(() => {
     let interval;
     if (activeRequestId) {
@@ -81,18 +81,19 @@ function App() {
     return () => clearInterval(interval);
   }, [activeRequestId, step]);
 
-  // --- HANDLERS ---
   const handleLoginSuccess = (userData, token) => {
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', token);
       setUser(userData);
-      setView(userData.role === 'volunteer' ? 'volunteer' : 'home');
+      if(userData.role === 'volunteer') navigate('/volunteer');
+      else if(userData.role === 'admin') navigate('/admin');
+      else navigate('/home');
   };
 
   const handleLogout = () => {
       localStorage.clear();
       setUser(null);
-      setView('landing');
+      navigate('/');
   };
 
   const handleFindVolunteer = async (bookingDetails) => { 
@@ -115,57 +116,70 @@ function App() {
     } catch (err) { showToast("Network Error", "error"); setStep('selecting'); }
   };
 
-  // --- VIEWS ---
   if (isLoading) return <AppLoader />;
 
-  // 1. PUBLIC SCREENS
-  if (!user) {
-      if (view === 'login') return <Login onLoginSuccess={handleLoginSuccess} onBack={() => setView('landing')} onRegisterClick={() => setView('register')} />;
-      if (view === 'register') return <UserSignup onRegisterSuccess={handleLoginSuccess} onBack={() => setView('landing')} />;
-      if (view === 'volunteer-signup') return <VolunteerSignup onRegisterSuccess={handleLoginSuccess} onBack={() => setView('landing')} />;
-      
-      // Landing Page
-      return <LandingPage 
-          onGetStarted={() => setView('login')} 
-          onVolunteerJoin={() => setView('volunteer-signup')} 
-      />;
-  }
-
-  // 2. PROTECTED SCREENS
-  if (view === 'volunteer') return <VolunteerDashboard user={user} onLogout={handleLogout} />;
-  if (view === 'admin') return <AdminPanel onLogout={handleLogout} />;
-  if (view === 'profile') return <UserProfile user={user} onLogout={handleLogout} onBack={() => setView('home')} />;
-  if (view === 'activity') return <div className="h-screen w-full bg-[#050505] text-white flex flex-col"><ActivityHistory user={user} onBack={() => setView('home')}/><BottomNav activeTab="activity" onHomeClick={() => setView('home')} onProfileClick={() => setView('profile')} onActivityClick={() => setView('activity')} onSOSClick={() => setShowSOS(true)} /></div>;
-
-  // 3. USER HOME SCREEN
   return (
     <div className="h-screen w-full relative overflow-hidden bg-[#050505] font-sans text-white">
-      <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
-      <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => {setShowSOS(false); showToast("🚨 ALERT SENT!", "error");}} />
-      
-      {/* Dynamic Header */}
-      <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
-          <button onClick={() => setView('profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl active:scale-90 transition"><Menu size={20}/></button>
-          <div className="bg-[#0a0a0a]/90 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-2xl flex items-center gap-3">
-             <div className={`w-2 h-2 rounded-full ${step === 'selecting' ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`}></div>
-             <span className="text-xs font-bold text-white uppercase tracking-wider">{step === 'selecting' ? 'Live' : 'Active'}</span>
-          </div>
-          <div className="flex gap-3 pointer-events-auto">
-              <button onClick={() => setShowNotifs(!showNotifs)} className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl"><Bell size={18}/></button>
-              <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center border-2 border-red-500 shadow-lg text-white animate-pulse"><Shield size={18}/></button>
-          </div>
+      <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4">
+          {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       </div>
 
-      <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4">{toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}</div>
+      <Routes>
+        {/* PUBLIC ROUTES */}
+        <Route path="/" element={<LandingPage onGetStarted={() => navigate('/login')} onVolunteerJoin={() => navigate('/volunteer-register')} />} />
+        
+        <Route path="/login" element={
+            <Login 
+                onLogin={(u, t) => handleLoginSuccess(u, t)} 
+                onVolunteerClick={() => navigate('/volunteer-register')} 
+                onSignupClick={() => navigate('/register')} 
+                onBack={() => navigate('/')} 
+            />
+        } />
+        
+        <Route path="/register" element={<UserSignup onRegister={(u) => handleLoginSuccess(u, 'temp-token')} onBack={() => navigate('/')} />} />
+        <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u) => handleLoginSuccess(u, 'temp-token')} onBack={() => navigate('/')} />} />
 
-      {/* Logic Steps */}
-      {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
-      {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => setStep('selecting')} />}
-      {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
-      {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
-      {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => setStep('selecting')} onSubmit={() => setStep('selecting')} showToast={showToast} />}
+        {/* PROTECTED ROUTES */}
+        {user && (
+            <>
+                <Route path="/home" element={
+                    <>
+                        <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
+                        
+                        {/* HEADER */}
+                        <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
+                            <button onClick={() => navigate('/profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl"><Menu size={20}/></button>
+                            <div className="bg-[#0a0a0a]/90 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-2xl flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${step==='selecting'?'bg-green-500':'bg-yellow-500'} animate-pulse`}></div>
+                                <span className="text-xs font-bold text-white uppercase tracking-wider">{step==='selecting'?'Live':'Active'}</span>
+                            </div>
+                            <div className="flex gap-3 pointer-events-auto">
+                                <button onClick={() => setShowNotifs(!showNotifs)} className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10"><Bell size={18}/></button>
+                                <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center border-2 border-red-500 animate-pulse"><Shield size={18}/></button>
+                            </div>
+                        </div>
 
-      {step !== 'searching' && step !== 'rating' && <BottomNav activeTab="home" onHomeClick={() => setView('home')} onProfileClick={() => setView('profile')} onActivityClick={() => setView('activity')} onSOSClick={() => setShowSOS(true)} />}
+                        {/* CONTENT SWITCHER */}
+                        {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
+                        {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => setStep('selecting')} />}
+                        {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
+                        {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
+                        {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => setStep('selecting')} onSubmit={() => setStep('selecting')} showToast={showToast} />}
+
+                        <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
+                        
+                        <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => {setShowSOS(false); showToast("🚨 ALERT SENT!", "error");}} />
+                    </>
+                } />
+
+                <Route path="/profile" element={<UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} />} />
+                <Route path="/activity" element={<div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div>} />
+                <Route path="/volunteer" element={<VolunteerDashboard user={user} globalToast={showToast} />} />
+                <Route path="/admin" element={<AdminPanel onLogout={handleLogout} />} />
+            </>
+        )}
+      </Routes>
     </div>
   );
 }
