@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom'; // Using Router logic
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Bell, Shield, X } from 'lucide-react';
 
 // Import Components
@@ -22,7 +22,7 @@ import LandingPage from './components/LandingPage';
 import AppLoader from './components/AppLoader'; 
 import SOSModal from './components/SOSModal'; 
 
-// SMART URL (Fixes Connection Error)
+// --- FIXED URL (Added .com) ---
 const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
@@ -117,6 +117,30 @@ function App() {
     } catch (err) { showToast("Network Error", "error"); setStep('selecting'); }
   };
 
+  // NOTIFICATION OVERLAY
+  const NotificationOverlay = () => (
+      <div className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-md animate-in slide-in-from-right duration-300">
+          <div className="p-6 pt-12">
+              <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-2xl font-black text-white">Notifications</h2>
+                  <button onClick={() => setShowNotifs(false)} className="p-2 bg-[#222] rounded-full text-white"><X size={20}/></button>
+              </div>
+              <div className="space-y-3">
+                  {notifications.map(n => (
+                      <div key={n.id} className="bg-[#121212] p-4 rounded-2xl border border-white/10 flex gap-4">
+                          <div className={`mt-1 w-2 h-2 rounded-full ${n.type==='success'?'bg-green-500':'bg-blue-500'}`}></div>
+                          <div>
+                              <h4 className="font-bold text-white">{n.title}</h4>
+                              <p className="text-sm text-neutral-400">{n.msg}</p>
+                              <p className="text-[10px] text-neutral-600 mt-2 uppercase font-bold">{n.time}</p>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      </div>
+  );
+
   if (isLoading) return <AppLoader />;
 
   return (
@@ -131,43 +155,47 @@ function App() {
         
         <Route path="/login" element={
             <Login 
-                onLoginSuccess={(u, t) => handleLoginSuccess(u, t)} 
+                onLogin={(u, t) => handleLoginSuccess(u, t)} 
+                onVolunteerClick={() => navigate('/volunteer-register')} 
+                onSignupClick={() => navigate('/register')} 
                 onBack={() => navigate('/')} 
-                onRegisterClick={() => navigate('/register')} 
             />
         } />
         
         <Route path="/register" element={<UserSignup onRegister={(u) => handleLoginSuccess(u, 'temp-token')} onBack={() => navigate('/')} />} />
         <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u) => handleLoginSuccess(u, 'temp-token')} onBack={() => navigate('/')} />} />
 
-        {/* PROTECTED ROUTES */}
+        {/* PROTECTED ROUTES - HOME */}
         <Route path="/home" element={
-            <>
-                <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
-                
-                {/* HEADER */}
-                <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
-                    <button onClick={() => navigate('/profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl"><Menu size={20}/></button>
-                    <div className="bg-[#0a0a0a]/90 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-2xl flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${step==='selecting'?'bg-green-500':'bg-yellow-500'} animate-pulse`}></div>
-                        <span className="text-xs font-bold text-white uppercase tracking-wider">{step==='selecting'?'Live':'Active'}</span>
+            user ? (
+                <>
+                    <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
+                    {showNotifs && <NotificationOverlay />}
+                    
+                    {/* HEADER */}
+                    <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
+                        <button onClick={() => navigate('/profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl"><Menu size={20}/></button>
+                        <div className="bg-[#0a0a0a]/90 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-2xl flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${step==='selecting'?'bg-green-500':'bg-yellow-500'} animate-pulse`}></div>
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">{step==='selecting'?'Live':'Active'}</span>
+                        </div>
+                        <div className="flex gap-3 pointer-events-auto">
+                            <button onClick={() => setShowNotifs(!showNotifs)} className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10"><Bell size={18}/></button>
+                            <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center border-2 border-red-500 animate-pulse"><Shield size={18}/></button>
+                        </div>
                     </div>
-                    <div className="flex gap-3 pointer-events-auto">
-                        <button onClick={() => setShowNotifs(!showNotifs)} className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10"><Bell size={18}/></button>
-                        <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center border-2 border-red-500 animate-pulse"><Shield size={18}/></button>
-                    </div>
-                </div>
 
-                {/* CONTENT SWITCHER */}
-                {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
-                {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => setStep('selecting')} />}
-                {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
-                {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
-                {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => setStep('selecting')} onSubmit={() => setStep('selecting')} showToast={showToast} />}
+                    {/* CONTENT STEPS */}
+                    {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
+                    {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => setStep('selecting')} />}
+                    {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
+                    {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
+                    {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => setStep('selecting')} onSubmit={() => setStep('selecting')} showToast={showToast} />}
 
-                <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
-                <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => {setShowSOS(false); showToast("🚨 ALERT SENT!", "error");}} />
-            </>
+                    <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
+                    <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => {setShowSOS(false); showToast("🚨 ALERT SENT!", "error");}} />
+                </>
+            ) : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />
         } />
 
         <Route path="/profile" element={<UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} />} />

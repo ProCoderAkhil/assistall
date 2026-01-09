@@ -31,7 +31,9 @@ const rootDir = path.join(__dirname, '../');
 const uploadDir = path.join(rootDir, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
+// ALLOW ALL CONNECTIONS
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+
 app.use(express.json());
 app.use('/uploads', express.static(uploadDir));
 
