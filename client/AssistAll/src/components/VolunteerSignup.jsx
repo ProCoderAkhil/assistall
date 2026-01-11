@@ -17,7 +17,10 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  const DEPLOYED_API_URL = `http://${window.location.hostname}:5000`;
+  // ⚠️ FIXED URL: Handles Localhost vs Render automatically
+  const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
+      ? 'http://localhost:5000' 
+      : 'https://assistall-server.onrender.com';
 
   // --- CAMERA LOGIC ---
   const startCamera = async () => {
@@ -58,6 +61,7 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
     setLoading(true);
     setError('');
 
+    // Basic Validation
     if (!capturedImage || !idFile) {
         setError("Please complete all verification steps.");
         setLoading(false);
@@ -65,17 +69,34 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
     }
 
     try {
-      // In a real app, you would append images to FormData here
-      const response = await fetch(`${DEPLOYED_API_URL}/api/auth/volunteer/register`, {
+      // ⚠️ CRITICAL FIX: Sending clean JSON data to Backend
+      const response = await fetch(`${DEPLOYED_API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+            password: formData.password.trim(),
+            govtId: formData.govtId.trim(),
+            adminCode: formData.adminCode.trim().toUpperCase(), // Code must be uppercase
+            role: 'volunteer' // ⚠️ REQUIRED: Tells backend to check the code
+        }),
       });
+
       const data = await response.json();
-      if (response.ok) onRegister(data);
-      else setError(data.message || "Invalid Admin Code.");
-    } catch (err) { setError("Connection failed."); }
-    setLoading(false);
+      
+      if (response.ok) {
+        // Success! Pass user & token back to App.jsx
+        onRegister(data.user || data, data.token);
+      } else {
+        setError(data.message || "Invalid Admin Code or Server Error.");
+      }
+    } catch (err) { 
+        console.error(err);
+        setError("Connection failed. Server might be sleeping (wait 30s)."); 
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -126,7 +147,7 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                         <input name="govtId" type="text" placeholder="Govt ID / License #" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.govtId} />
                     </div>
                     
-                    <button onClick={() => { if(formData.name && formData.email) setStep(2); else setError("Please fill all fields"); }} className="w-full bg-white text-black font-bold py-4 rounded-xl mt-4 hover:bg-gray-200 transition flex items-center justify-center gap-2">
+                    <button onClick={() => { if(formData.name && formData.email && formData.password) setStep(2); else setError("Please fill all fields"); }} className="w-full bg-white text-black font-bold py-4 rounded-xl mt-4 hover:bg-gray-200 transition flex items-center justify-center gap-2">
                         Next Step <ChevronRight size={18}/>
                     </button>
                 </div>
