@@ -2,92 +2,89 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   MapPin, Navigation, Phone, Search, User, Shield, Menu, Car, Heart, Zap, 
   ShoppingBag, ArrowLeft, ArrowRight, Trash2, CreditCard, Star, CheckCircle, 
-  Clock, Map, Bell, X
+  Clock, Map, Bell, X, MessageSquare, AlertTriangle
 } from 'lucide-react';
 
 const UserDashboard = () => {
+  // UI State
   const [step, setStep] = useState('menu'); // menu -> input -> searching -> found -> completed
   const [selectedService, setSelectedService] = useState(null);
+  
+  // Data State
   const [rideId, setRideId] = useState(null); 
   const [volunteerDetails, setVolunteerDetails] = useState(null);
-  const [rideStatus, setRideStatus] = useState(null); 
+  const [rideStatus, setRideStatus] = useState(null); // 'pending', 'accepted', 'in_progress', 'completed'
   
-  // Modals
+  // Modals & Popups
   const [showPickupModal, setShowPickupModal] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [showSOS, setShowSOS] = useState(false);
   
-  // Payment States
+  // Payment
   const [tip, setTip] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('online'); 
 
-  // Fixed URL
+  // System
   const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
       ? 'http://localhost:5000' 
       : 'https://assistall-server.onrender.com';
 
-  const pollingInterval = useRef(null);
-  const lastStatusRef = useRef(null); // ⚠️ KEY FIX: Remembers last status to prevent loops
+  const isPolling = useRef(false);
+  const previousStatus = useRef(null); // ⚠️ THE LOOP KILLER
 
-  // --- 1. ROBUST POLLING ENGINE (ANTI-LOOP) ---
+  // --- 1. V33 STABLE POLLING ENGINE ---
   useEffect(() => {
-    if (!rideId) return;
+    if (!rideId || step === 'completed') return;
 
-    const pollRideStatus = async () => {
+    isPolling.current = true;
+
+    const checkStatus = async () => {
+      if (!isPolling.current) return;
+
       try {
         const res = await fetch(`${DEPLOYED_API_URL}/api/requests`);
-        if (!res.ok) return;
-        
-        const allRides = await res.json();
-        const myRide = allRides.find(r => r._id === rideId);
+        if (res.ok) {
+            const allRides = await res.json();
+            const myRide = allRides.find(r => r._id === rideId);
 
-        if (myRide) {
-          const currentStatus = myRide.status;
-          
-          // ⚠️ LOOP FIX: Only update if status CHANGED
-          if (currentStatus !== lastStatusRef.current) {
-              console.log(`Status Changed: ${lastStatusRef.current} -> ${currentStatus}`);
-              lastStatusRef.current = currentStatus; // Update Ref
-              setRideStatus(currentStatus);
+            if (myRide) {
+                const s = myRide.status;
+                
+                // ⚠️ CRITICAL: Only update if status REALLY changed
+                if (s !== previousStatus.current) {
+                    console.log(`State Transition: ${previousStatus.current} -> ${s}`);
+                    previousStatus.current = s;
+                    setRideStatus(s); // Update React State
 
-              // 1. VOLUNTEER FOUND
-              if (currentStatus === 'accepted') {
-                 setVolunteerDetails({ name: myRide.volunteerName || "Volunteer" });
-                 setStep('found');
-                 navigator.vibrate?.([200, 100, 200]);
-              }
-              
-              // 2. PICKED UP (Show Popup)
-              else if (currentStatus === 'in_progress') {
-                 setVolunteerDetails({ name: myRide.volunteerName || "Volunteer" });
-                 setStep('found'); 
-                 setShowPickupModal(true); // TRIGGER POPUP
-                 navigator.vibrate?.(500);
-              }
-
-              // 3. COMPLETED (Show Rating)
-              else if (currentStatus === 'completed') {
-                 setStep('completed');
-                 stopPolling(); 
-                 navigator.vibrate?.([100, 50, 100, 50, 100]);
-              }
-          }
+                    // LOGIC CONTROLLER
+                    if (s === 'accepted') {
+                        setVolunteerDetails({ name: myRide.volunteerName || "Volunteer" });
+                        setStep('found');
+                    } 
+                    else if (s === 'in_progress') {
+                        setVolunteerDetails({ name: myRide.volunteerName || "Volunteer" });
+                        setStep('found'); 
+                        setShowPickupModal(true); // Show "Picked Up" Popup
+                    }
+                    else if (s === 'completed') {
+                        setStep('completed');
+                        isPolling.current = false; // Stop polling
+                    }
+                }
+            }
         }
-      } catch (err) { console.error("Polling Error:", err); }
+      } catch (e) { console.error("Sync skip"); }
+
+      // Recursive call for stability
+      if (isPolling.current) setTimeout(checkStatus, 3000);
     };
 
-    // Start Polling
-    pollingInterval.current = setInterval(pollRideStatus, 2000); 
+    checkStatus(); // Start loop
 
-    return () => stopPolling();
-  }, [rideId]);
+    return () => { isPolling.current = false; };
+  }, [rideId, step]);
 
-  const stopPolling = () => {
-      if (pollingInterval.current) {
-          clearInterval(pollingInterval.current);
-          pollingInterval.current = null;
-      }
-  };
-
-  // --- 2. PAYMENT HANDLER ---
+  // --- 2. PAYMENT LOGIC ---
   const loadRazorpayScript = (src) => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
@@ -104,13 +101,8 @@ const UserDashboard = () => {
         window.location.reload(); 
         return;
     }
-
     const res = await loadRazorpayScript('https://checkout.razorpay.com/v1/checkout.js');
-
-    if (!res) {
-      alert('Razorpay SDK failed to load.');
-      return;
-    }
+    if (!res) return alert('Razorpay failed to load.');
 
     const options = {
       key: "rzp_test_S1HtYIQWxqe96O", 
@@ -120,29 +112,17 @@ const UserDashboard = () => {
       description: `Ride Fare`,
       image: "https://cdn-icons-png.flaticon.com/512/1041/1041888.png",
       handler: function (response) {
-        alert(`Payment Successful! ID: ${response.razorpay_payment_id}`);
+        alert(`Success! Ref: ${response.razorpay_payment_id}`);
         window.location.reload(); 
       },
-      prefill: { name: "John User", contact: "9999999999" },
+      prefill: { name: "User", contact: "9999999999" },
       theme: { color: "#3B82F6" }
     };
-
-    const paymentObject = new window.Razorpay(options);
-    paymentObject.open();
+    const rzp = new window.Razorpay(options);
+    rzp.open();
   };
 
   // --- ACTIONS ---
-  const handleSelectService = (service) => { setSelectedService(service); setStep('input'); };
-  
-  const handleCancel = () => { 
-      setStep('menu'); 
-      setRideId(null); 
-      setRideStatus(null);
-      lastStatusRef.current = null;
-      setSelectedService(null);
-      stopPolling();
-  };
-  
   const handleConfirmRequest = async () => {
     try {
       const res = await fetch(`${DEPLOYED_API_URL}/api/requests`, {
@@ -154,22 +134,44 @@ const UserDashboard = () => {
         const data = await res.json();
         setRideId(data._id);
         setStep('searching'); 
-      } else {
-          alert("Request Failed.");
       }
-    } catch (e) { alert("Connection Failed."); }
+    } catch (e) { alert("Connection Error"); }
   };
 
-  // --- MODALS ---
+  const handleCancel = () => {
+      isPolling.current = false;
+      setRideId(null);
+      previousStatus.current = null;
+      setStep('menu');
+  };
+
+  // --- V33 COMPONENTS ---
   const PickupModal = () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-[90%] max-w-sm p-6 rounded-3xl text-center shadow-2xl animate-in zoom-in">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Car size={32} className="text-blue-600"/>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white w-[85%] max-w-sm p-6 rounded-[32px] text-center shadow-2xl animate-in zoom-in duration-300">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-lg">
+                  <Car size={40} className="text-blue-600"/>
               </div>
-              <h2 className="text-2xl font-black mb-2">Volunteer Picked You Up!</h2>
-              <p className="text-gray-500 mb-6">Heading to your destination.</p>
-              <button onClick={() => setShowPickupModal(false)} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">Okay, Let's Go!</button>
+              <h2 className="text-2xl font-black mb-2 text-neutral-900">Ride Started!</h2>
+              <p className="text-neutral-500 mb-8 font-medium leading-relaxed">Volunteer has picked you up. <br/>Heading to destination.</p>
+              <button onClick={() => setShowPickupModal(false)} className="w-full bg-black text-white font-bold py-4 rounded-2xl shadow-xl hover:scale-[1.02] transition">Awesome, Let's Go</button>
+          </div>
+      </div>
+  );
+
+  const SOSModal = () => (
+      <div className="fixed inset-0 z-[100] flex items-end justify-center bg-red-900/90 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md p-6 rounded-t-[32px] animate-in slide-in-from-bottom">
+              <div className="flex items-center gap-3 mb-6 text-red-600">
+                  <AlertTriangle size={32}/>
+                  <h2 className="text-2xl font-black">Emergency SOS</h2>
+              </div>
+              <p className="text-neutral-600 mb-8 font-medium">Who should we contact?</p>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                  <button className="p-4 bg-red-50 border border-red-100 rounded-2xl font-bold text-red-700 flex flex-col items-center gap-2"><Phone size={24}/> Call Police</button>
+                  <button className="p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-gray-700 flex flex-col items-center gap-2"><User size={24}/> Emergency Contact</button>
+              </div>
+              <button onClick={() => setShowSOS(false)} className="w-full bg-gray-200 text-gray-800 font-bold py-4 rounded-2xl">Cancel</button>
           </div>
       </div>
   );
@@ -187,26 +189,26 @@ const UserDashboard = () => {
         </div>
       )}
 
-      {/* MAP */}
+      {/* MAP BACKGROUND */}
       {step !== 'completed' && (
         <div className="absolute inset-0 z-0">
             <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src="https://www.openstreetmap.org/export/embed.html?bbox=76.51%2C9.58%2C76.54%2C9.60&amp;layer=mapnik&amp;marker=9.59%2C76.52" style={{ filter: 'grayscale(100%) invert(90%) contrast(120%)' }}></iframe>
         </div>
       )}
 
-      {/* --- STEP 1: MENU --- */}
+      {/* 1. MENU */}
       {step === 'menu' && (
          <div className="absolute bottom-0 w-full z-10 bg-white rounded-t-[32px] p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-500">
             <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6"></div>
             <h2 className="text-2xl font-black mb-6 text-neutral-800">What do you need?</h2>
             <div className="grid grid-cols-2 gap-4">
                 {[
-                    { id: 'Ride', icon: Car, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
-                    { id: 'Helper', icon: Heart, color: 'text-pink-500', bg: 'bg-pink-50', border: 'border-pink-200' },
-                    { id: 'Meds', icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-                    { id: 'Shop', icon: ShoppingBag, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' }
+                    { id: 'Ride', icon: Car, color: 'text-green-600', bg: 'bg-green-50' },
+                    { id: 'Helper', icon: Heart, color: 'text-pink-500', bg: 'bg-pink-50' },
+                    { id: 'Meds', icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+                    { id: 'Shop', icon: ShoppingBag, color: 'text-blue-500', bg: 'bg-blue-50' }
                 ].map(s => (
-                    <button key={s.id} onClick={() => handleSelectService(s.id)} className={`p-5 ${s.bg} border ${s.border} rounded-2xl flex flex-col items-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-sm`}>
+                    <button key={s.id} onClick={() => { setSelectedService(s.id); setStep('input'); }} className={`p-5 ${s.bg} rounded-2xl flex flex-col items-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-sm`}>
                         <s.icon size={32} className={s.color}/>
                         <span className="font-bold text-sm text-neutral-700">{s.id}</span>
                     </button>
@@ -215,42 +217,42 @@ const UserDashboard = () => {
          </div>
       )}
 
-      {/* --- STEP 2: INPUT --- */}
+      {/* 2. INPUT */}
       {step === 'input' && (
          <div className="absolute bottom-0 w-full z-10 bg-white rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom">
-            <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => setStep('menu')}><ArrowLeft className="text-neutral-400"/></button>
-                <h2 className="text-2xl font-black">Request {selectedService}</h2>
-            </div>
+            <button onClick={() => setStep('menu')} className="mb-4"><ArrowLeft className="text-neutral-400"/></button>
+            <h2 className="text-2xl font-black mb-6">Request {selectedService}</h2>
             <div className="space-y-4 mb-8">
-                 <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100"><div className="bg-blue-100 p-2 rounded-full"><Navigation size={16} className="text-blue-600"/></div><input type="text" placeholder="Current Location" className="bg-transparent font-bold w-full outline-none"/></div>
-                 <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100"><div className="bg-red-100 p-2 rounded-full"><MapPin size={16} className="text-red-600"/></div><input type="text" placeholder="Where to?" className="bg-transparent font-bold w-full outline-none"/></div>
+                 <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4"><div className="bg-blue-100 p-2 rounded-full"><Navigation size={16} className="text-blue-600"/></div><input type="text" placeholder="Current Location" className="bg-transparent font-bold w-full outline-none"/></div>
+                 <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4"><div className="bg-red-100 p-2 rounded-full"><MapPin size={16} className="text-red-600"/></div><input type="text" placeholder="Where to?" className="bg-transparent font-bold w-full outline-none"/></div>
             </div>
-            <button onClick={handleConfirmRequest} className="w-full bg-black text-white font-black py-4 rounded-2xl text-lg flex justify-center items-center gap-3 shadow-xl active:scale-95 transition-all">Confirm Request <ArrowRight size={20}/></button>
+            <button onClick={handleConfirmRequest} className="w-full bg-black text-white font-black py-4 rounded-2xl text-lg flex justify-center items-center gap-3 active:scale-95 transition-all">Confirm Request <ArrowRight size={20}/></button>
          </div>
       )}
 
-      {/* --- STEP 3: SEARCHING --- */}
+      {/* 3. SEARCHING */}
       {step === 'searching' && (
-          <div className="absolute bottom-0 w-full z-10 p-6 flex flex-col items-center pb-12 bg-gradient-to-t from-black via-black/90 to-transparent text-white animate-in fade-in duration-700">
+          <div className="absolute bottom-0 w-full z-10 p-6 flex flex-col items-center pb-12 bg-gradient-to-t from-black via-black/90 to-transparent text-white animate-in fade-in">
                <div className="relative mb-8">
                    <div className="w-32 h-32 bg-blue-500/10 rounded-full animate-ping absolute inset-0"></div>
                    <div className="w-32 h-32 bg-black border-4 border-blue-500 rounded-full flex items-center justify-center relative z-10"><Search size={40} className="text-blue-500 animate-pulse"/></div>
                </div>
                <h3 className="text-2xl font-black mb-1">Finding Help...</h3>
-               <button onClick={handleCancel} className="bg-white/10 backdrop-blur-md px-8 py-3 rounded-full font-bold text-sm text-white hover:bg-white/20 transition mt-6">Cancel Request</button>
+               <button onClick={handleCancel} className="bg-white/10 backdrop-blur-md px-8 py-3 rounded-full font-bold text-sm text-white mt-6">Cancel</button>
           </div>
       )}
 
-      {/* --- STEP 4: FOUND / IN PROGRESS --- */}
+      {/* 4. FOUND / IN PROGRESS (V33 INTERFACE) */}
       {step === 'found' && (
           <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#121212] border border-white/10 p-6 rounded-[32px] shadow-2xl text-white animate-in slide-in-from-bottom duration-500">
-              <div className={`absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2 ${rideStatus === 'in_progress' ? 'bg-green-600 shadow-green-900/50' : 'bg-blue-600 shadow-blue-900/50'}`}>
-                  {rideStatus === 'in_progress' ? <Navigation size={10} fill="currentColor"/> : <Bell size={10} fill="currentColor"/>}
-                  {rideStatus === 'in_progress' ? "HEADING TO DROP" : "VOLUNTEER ARRIVING"}
+              
+              {/* Dynamic Status Bar */}
+              <div className="flex items-center gap-2 mb-6 bg-white/5 p-1 rounded-full">
+                  <div className={`flex-1 py-1 rounded-full text-center text-[10px] font-black uppercase transition-all ${rideStatus === 'accepted' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}>Arriving</div>
+                  <div className={`flex-1 py-1 rounded-full text-center text-[10px] font-black uppercase transition-all ${rideStatus === 'in_progress' ? 'bg-green-600 text-white shadow-lg' : 'text-neutral-500'}`}>In Progress</div>
               </div>
 
-              <div className="flex justify-between items-start mb-6 mt-2">
+              <div className="flex justify-between items-start mb-6">
                   <div>
                       <h3 className="text-gray-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-1"><Shield size={12}/> VERIFIED PARTNER</h3>
                       <h2 className="text-3xl font-black tracking-tight">{volunteerDetails?.name}</h2>
@@ -264,16 +266,20 @@ const UserDashboard = () => {
                   </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                  <button className="bg-green-600 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-green-500 transition active:scale-95"><Phone size={20}/> Call</button>
-                  <button className="bg-neutral-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-neutral-700 transition active:scale-95"><Navigation size={20}/> Message</button>
+              <div className="grid grid-cols-4 gap-3">
+                  <button className="col-span-2 bg-green-600 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95"><Phone size={20}/> Call</button>
+                  <button onClick={() => setShowChat(!showChat)} className="bg-neutral-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center hover:bg-neutral-700 active:scale-95 relative">
+                      <MessageSquare size={20}/>
+                      {showChat && <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></div>}
+                  </button>
+                  <button onClick={() => setShowSOS(true)} className="bg-red-900/30 border border-red-500/50 text-red-500 font-bold py-4 rounded-2xl flex items-center justify-center hover:bg-red-900/50 active:scale-95"><AlertTriangle size={20}/></button>
               </div>
           </div>
       )}
 
-      {/* --- STEP 5: COMPLETED --- */}
+      {/* 5. COMPLETED & PAYMENT */}
       {step === 'completed' && (
-          <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6 animate-in slide-in-from-bottom duration-500">
+          <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6 animate-in zoom-in duration-500">
               <div className="bg-green-50 p-8 rounded-full shadow-xl mb-6 border border-green-100 animate-bounce">
                   <CheckCircle size={64} className="text-green-500"/>
               </div>
@@ -288,7 +294,7 @@ const UserDashboard = () => {
                   <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-4 text-center">ADD A TIP</p>
                   <div className="grid grid-cols-4 gap-3">
                       {[0, 20, 50, 100].map(amount => (
-                          <button key={amount} onClick={() => setTip(amount)} className={`py-4 rounded-2xl font-bold border-2 transition active:scale-95 ${tip === amount ? 'bg-black text-white border-black shadow-xl' : 'bg-white text-black border-gray-100 hover:border-gray-300'}`}>{amount === 0 ? 'No' : `₹${amount}`}</button>
+                          <button key={amount} onClick={() => setTip(amount)} className={`py-4 rounded-2xl font-bold border-2 transition active:scale-95 ${tip === amount ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-100'}`}>{amount === 0 ? 'No' : `₹${amount}`}</button>
                       ))}
                   </div>
               </div>
@@ -301,11 +307,12 @@ const UserDashboard = () => {
               <button onClick={handlePayment} className="w-full max-w-md bg-blue-600 text-white font-black py-5 rounded-2xl text-lg shadow-xl hover:bg-blue-700 transition active:scale-[0.98] flex items-center justify-center gap-2">
                   {paymentMethod === 'online' ? `Pay ₹${150 + tip}` : `Confirm Cash Payment`} <ArrowRight size={20}/>
               </button>
-              <button onClick={() => window.location.reload()} className="mt-6 text-gray-400 font-bold text-xs uppercase tracking-widest hover:text-black transition">Skip Rating</button>
+              <button onClick={() => window.location.reload()} className="mt-6 text-gray-400 font-bold text-xs uppercase tracking-widest hover:text-black transition">Skip</button>
           </div>
       )}
 
       {showPickupModal && <PickupModal />}
+      {showSOS && <SOSModal />}
     </div>
   );
 };
