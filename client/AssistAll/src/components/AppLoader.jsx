@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Zap, Radio, CheckCircle, Server, Lock } from 'lucide-react';
 
-// ⚠️ FIX: Define this Icon component BEFORE using it in AppLoader
+// ✅ FIX: Defined 'Power' at the top so it exists before use
 const Power = (props) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
 );
@@ -11,7 +11,7 @@ const AppLoader = () => {
   const [currentStep, setCurrentStep] = useState(0);
   
   const loadingSteps = [
-    { text: "INITIALIZING CORE SYSTEMS...", icon: Power }, // Power is now valid
+    { text: "INITIALIZING CORE SYSTEMS...", icon: Power }, // Now safe to use
     { text: "ESTABLISHING SECURE UPLINK...", icon: Lock },
     { text: "CALIBRATING GPS SATELLITES...", icon: Radio },
     { text: "VERIFYING USER CREDENTIALS...", icon: Shield },
