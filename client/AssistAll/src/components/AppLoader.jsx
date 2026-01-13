@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Zap, Radio, CheckCircle, Server, Lock } from 'lucide-react';
 
+// ⚠️ FIX: Define this Icon component BEFORE using it in AppLoader
+const Power = (props) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
+);
+
 const AppLoader = () => {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   
   const loadingSteps = [
-    { text: "INITIALIZING CORE SYSTEMS...", icon: Power },
+    { text: "INITIALIZING CORE SYSTEMS...", icon: Power }, // Power is now valid
     { text: "ESTABLISHING SECURE UPLINK...", icon: Lock },
     { text: "CALIBRATING GPS SATELLITES...", icon: Radio },
     { text: "VERIFYING USER CREDENTIALS...", icon: Shield },
@@ -14,7 +19,7 @@ const AppLoader = () => {
     { text: "ASSISTALL V5 READY.", icon: CheckCircle }
   ];
 
-  // Helper component for icons to avoid "not defined" errors if using Lucide
+  // Helper component for icons
   const CurrentIcon = loadingSteps[Math.min(currentStep, 5)].icon || Shield;
 
   useEffect(() => {
@@ -120,10 +125,5 @@ const AppLoader = () => {
     </div>
   );
 };
-
-// Simple icon placeholder if import fails, ensuring robustness
-const Power = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
-);
 
 export default AppLoader;

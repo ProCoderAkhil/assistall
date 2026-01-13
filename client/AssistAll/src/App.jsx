@@ -75,8 +75,7 @@ function App() {
 
   // 2. LOADING SCREEN
   useEffect(() => { 
-      // Prevent white screen by ensuring loading state clears even if errors happen
-      const timer = setTimeout(() => setIsLoading(false), 2500);
+      const timer = setTimeout(() => setIsLoading(false), 2500); 
       return () => clearTimeout(timer);
   }, []);
 
@@ -124,15 +123,10 @@ function App() {
       else navigate('/home');
   };
 
-  // ⚠️ CRITICAL FIX: SOFT LOGOUT
-  // Clears state and navigates without crashing the browser
+  // ⚠️ CRITICAL FIX: HARD RELOAD ON LOGOUT
   const handleLogout = () => { 
       localStorage.clear(); 
-      setUser(null); 
-      setAcceptedRequestData(null);
-      setActiveRequestId(null);
-      setStep('selecting');
-      navigate('/'); 
+      window.location.href = "/"; 
   };
 
   const handleFindVolunteer = async (bookingDetails) => { 
@@ -153,53 +147,58 @@ function App() {
   } catch (err) { showToast("Network Error", "error"); setStep('selecting'); }
   };
 
-  if (isLoading) return <AppLoader />;
-
   return (
     <ErrorBoundary>
       <div className="h-screen w-full bg-[#050505] font-sans text-white relative overflow-hidden">
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4">
-            {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+        
+        {/* Toast Container */}
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4 pointer-events-none">
+            {toast && <div className="pointer-events-auto"><Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} /></div>}
         </div>
 
-        <Routes>
-          <Route path="/" element={<LandingPage onGetStarted={() => navigate('/login')} onVolunteerJoin={() => navigate('/volunteer-register')} />} />
-          <Route path="/login" element={<Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} onSignupClick={() => navigate('/register')} onVolunteerClick={() => navigate('/volunteer-register')} />} />
-          <Route path="/register" element={<UserSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
-          <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
+        {/* Loading Overlay */}
+        {isLoading ? (
+            <AppLoader />
+        ) : (
+            <Routes>
+              <Route path="/" element={<LandingPage onGetStarted={() => navigate('/login')} onVolunteerJoin={() => navigate('/volunteer-register')} />} />
+              <Route path="/login" element={<Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} onSignupClick={() => navigate('/register')} onVolunteerClick={() => navigate('/volunteer-register')} />} />
+              <Route path="/register" element={<UserSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
+              <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
 
-          {/* PROTECTED USER ROUTES */}
-          <Route path="/home" element={user && user.role === 'user' ? (
-              <>
-                  <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
-                  <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
-                      <button onClick={() => navigate('/profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex justify-center items-center border border-white/10"><Menu size={20}/></button>
-                      <div className="flex gap-3 pointer-events-auto">
-                          <button className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex justify-center items-center border border-white/10"><Bell size={18}/></button>
-                          <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex justify-center items-center animate-pulse shadow-lg shadow-red-900/50"><Shield size={18}/></button>
+              {/* PROTECTED USER ROUTES */}
+              <Route path="/home" element={user && user.role === 'user' ? (
+                  <>
+                      <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
+                      <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
+                          <button onClick={() => navigate('/profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex justify-center items-center border border-white/10"><Menu size={20}/></button>
+                          <div className="flex gap-3 pointer-events-auto">
+                              <button className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex justify-center items-center border border-white/10"><Bell size={18}/></button>
+                              <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex justify-center items-center animate-pulse shadow-lg shadow-red-900/50"><Shield size={18}/></button>
+                          </div>
                       </div>
-                  </div>
-                  {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
-                  {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => { localStorage.removeItem('activeRideId'); setActiveRequestId(null); setStep('selecting'); }} />}
-                  {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
-                  {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
-                  {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} onSubmit={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} showToast={showToast} />}
-                  
-                  <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
-                  <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => { setShowSOS(false); showToast("SOS Alert Sent to Police!", "error"); }} />
-              </>
-          ) : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+                      {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
+                      {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => { localStorage.removeItem('activeRideId'); setActiveRequestId(null); setStep('selecting'); }} />}
+                      {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
+                      {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
+                      {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} onSubmit={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} showToast={showToast} />}
+                      
+                      <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
+                      <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => { setShowSOS(false); showToast("SOS Alert Sent to Police!", "error"); }} />
+                  </>
+              ) : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
 
-          {/* PROTECTED SHARED ROUTES */}
-          <Route path="/profile" element={user ? <UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-          <Route path="/activity" element={user ? <div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-          
-          {/* VOLUNTEER DASHBOARD */}
-          <Route path="/volunteer" element={user && user.role === 'volunteer' ? <VolunteerDashboard user={user} globalToast={showToast} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-          
-          {/* ADMIN PANEL */}
-          <Route path="/admin" element={user && user.role === 'admin' ? <AdminPanel onLogout={handleLogout} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-        </Routes>
+              {/* PROTECTED SHARED ROUTES */}
+              <Route path="/profile" element={user ? <UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+              <Route path="/activity" element={user ? <div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+              
+              {/* VOLUNTEER DASHBOARD */}
+              <Route path="/volunteer" element={user && user.role === 'volunteer' ? <VolunteerDashboard user={user} globalToast={showToast} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+              
+              {/* ADMIN PANEL */}
+              <Route path="/admin" element={user && user.role === 'admin' ? <AdminPanel onLogout={handleLogout} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+            </Routes>
+        )}
       </div>
     </ErrorBoundary>
   );
