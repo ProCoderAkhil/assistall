@@ -1,12 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { 
   User, Mail, Lock, Shield, ArrowLeft, Loader2, CreditCard, 
-  Key, CheckCircle, Camera, Upload, X, Eye, FileText, ChevronRight 
+  Key, CheckCircle, Camera, Upload, X, Eye, FileText, ChevronRight,
+  MapPin, Phone
 } from 'lucide-react';
 
 const VolunteerSignup = ({ onRegister, onBack }) => {
-  const [step, setStep] = useState(1); // 1: Info, 2: Verification
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', govtId: '', adminCode: '' });
+  const [step, setStep] = useState(1); // 1: Info, 2: Docs, 3: Admin Verification
+  const [formData, setFormData] = useState({ 
+      name: '', email: '', password: '', 
+      govtId: '', address: '', phone: '', adminCode: '' 
+  });
   const [capturedImage, setCapturedImage] = useState(null);
   const [idFile, setIdFile] = useState(null);
   
@@ -17,12 +21,11 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // ⚠️ FIXED URL: Handles Localhost vs Render automatically
   const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
       ? 'http://localhost:5000' 
       : 'https://assistall-server.onrender.com';
 
-  // --- CAMERA LOGIC ---
+  // --- CAMERA LOGIC (Unchanged) ---
   const startCamera = async () => {
     setIsCameraOpen(true);
     try {
@@ -61,39 +64,31 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
     setLoading(true);
     setError('');
 
-    // Basic Validation
-    if (!capturedImage || !idFile) {
-        setError("Please complete all verification steps.");
+    if (!formData.adminCode) {
+        setError("Please enter the verification code from Admin.");
         setLoading(false);
         return;
     }
 
     try {
-      // ⚠️ CRITICAL FIX: Sending clean JSON data to Backend
       const response = await fetch(`${DEPLOYED_API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            name: formData.name.trim(),
-            email: formData.email.trim().toLowerCase(),
-            password: formData.password.trim(),
-            govtId: formData.govtId.trim(),
-            adminCode: formData.adminCode.trim().toUpperCase(), // Code must be uppercase
-            role: 'volunteer' // ⚠️ REQUIRED: Tells backend to check the code
+            ...formData,
+            role: 'volunteer'
         }),
       });
 
       const data = await response.json();
       
       if (response.ok) {
-        // Success! Pass user & token back to App.jsx
         onRegister(data.user || data, data.token);
       } else {
-        setError(data.message || "Invalid Admin Code or Server Error.");
+        setError(data.message || "Invalid Admin Code.");
       }
     } catch (err) { 
-        console.error(err);
-        setError("Connection failed. Server might be sleeping (wait 30s)."); 
+        setError("Connection failed."); 
     } finally {
         setLoading(false);
     }
@@ -114,13 +109,16 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
 
             {/* Progress Bar */}
             <div className="flex justify-center mb-8 gap-2 mt-2">
-                <div className={`h-1 w-12 rounded-full transition-colors ${step >= 1 ? 'bg-blue-500' : 'bg-neutral-800'}`}></div>
-                <div className={`h-1 w-12 rounded-full transition-colors ${step >= 2 ? 'bg-blue-500' : 'bg-neutral-800'}`}></div>
+                {[1, 2, 3].map(i => (
+                    <div key={i} className={`h-1 w-12 rounded-full transition-colors ${step >= i ? 'bg-blue-500' : 'bg-neutral-800'}`}></div>
+                ))}
             </div>
 
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-black tracking-tight text-white">{step === 1 ? "Partner Details" : "Identity Verification"}</h2>
-                <p className="text-neutral-500 text-xs mt-2 uppercase tracking-widest font-bold">Step {step} of 2</p>
+                <h2 className="text-2xl font-black tracking-tight text-white">
+                    {step === 1 ? "Volunteer Profile" : step === 2 ? "Verify Identity" : "Admin Approval"}
+                </h2>
+                <p className="text-neutral-500 text-xs mt-2 uppercase tracking-widest font-bold">Step {step} of 3</p>
             </div>
 
             {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-6 text-xs font-bold text-center">{error}</div>}
@@ -134,17 +132,21 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                             <input name="name" type="text" placeholder="Full Name" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.name} />
                         </div>
                         <div className="relative group">
-                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-blue-500 transition" size={18} />
-                            <input name="email" type="email" placeholder="Email" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.email} />
+                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-blue-500 transition" size={18} />
+                            <input name="phone" type="text" placeholder="Phone" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.phone} />
                         </div>
+                    </div>
+                    <div className="relative group">
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-blue-500 transition" size={18} />
+                        <input name="email" type="email" placeholder="Email Address" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.email} />
+                    </div>
+                    <div className="relative group">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-blue-500 transition" size={18} />
+                        <input name="address" type="text" placeholder="Residential Address" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.address} />
                     </div>
                     <div className="relative group">
                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-blue-500 transition" size={18} />
                         <input name="password" type="password" placeholder="Create Password" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.password} />
-                    </div>
-                    <div className="relative group">
-                        <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-blue-500 transition" size={18} />
-                        <input name="govtId" type="text" placeholder="Govt ID / License #" className="w-full bg-[#111] border border-neutral-800 rounded-xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition" onChange={handleChange} value={formData.govtId} />
                     </div>
                     
                     <button onClick={() => { if(formData.name && formData.email && formData.password) setStep(2); else setError("Please fill all fields"); }} className="w-full bg-white text-black font-bold py-4 rounded-xl mt-4 hover:bg-gray-200 transition flex items-center justify-center gap-2">
@@ -153,11 +155,11 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                 </div>
             )}
 
-            {/* --- STEP 2: VERIFICATION --- */}
+            {/* --- STEP 2: DOCUMENTS (DigiLocker Sim) --- */}
             {step === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right">
                     
-                    {/* 1. Live Selfie Capture */}
+                    {/* Live Selfie */}
                     <div className="bg-[#111] p-4 rounded-2xl border border-neutral-800 text-center relative overflow-hidden group">
                         {isCameraOpen ? (
                             <div className="relative rounded-xl overflow-hidden bg-black aspect-video mb-4">
@@ -179,33 +181,74 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                         <canvas ref={canvasRef} className="hidden"></canvas>
                     </div>
 
-                    {/* 2. Document Upload */}
+                    {/* DigiLocker / ID Upload */}
                     <div className="relative">
-                        <label className="flex items-center gap-4 bg-[#111] border border-neutral-800 p-4 rounded-xl cursor-pointer hover:border-blue-500 transition group">
-                            <div className="p-3 bg-neutral-800 rounded-lg group-hover:bg-blue-500/20 group-hover:text-blue-500 transition"><FileText size={24}/></div>
+                        <div className="flex items-center gap-4 bg-[#111] border border-neutral-800 p-4 rounded-xl cursor-pointer hover:border-blue-500 transition group" onClick={() => document.getElementById('file-upload').click()}>
+                            <div className="p-3 bg-blue-900/20 text-blue-500 rounded-lg"><FileText size={24}/></div>
                             <div className="flex-1">
-                                <p className="text-sm font-bold text-white">{idFile ? idFile.name : "Upload Govt ID"}</p>
-                                <p className="text-xs text-neutral-500">{idFile ? "Ready to upload" : "PDF or JPG (Max 5MB)"}</p>
+                                <p className="text-sm font-bold text-white">{idFile ? idFile.name : "DigiLocker / Aadhaar Upload"}</p>
+                                <p className="text-xs text-neutral-500">{idFile ? "Verified" : "Tap to browse documents"}</p>
                             </div>
-                            <input type="file" className="hidden" onChange={handleFileChange} accept="image/*,.pdf" />
                             {idFile ? <CheckCircle size={20} className="text-green-500"/> : <Upload size={20} className="text-neutral-600"/>}
-                        </label>
-                    </div>
-
-                    {/* 3. Admin Code */}
-                    <div className="relative group">
-                        <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500/70" size={18} />
-                        <input name="adminCode" type="password" placeholder="Admin Access Code" className="w-full bg-yellow-900/5 border border-yellow-500/20 rounded-xl py-4 pl-12 pr-4 text-sm text-yellow-100 placeholder-yellow-500/30 focus:outline-none focus:border-yellow-500/50 transition" onChange={handleChange} value={formData.adminCode}/>
+                        </div>
+                        <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept="image/*,.pdf" />
                     </div>
 
                     <div className="flex gap-3 mt-6">
-                        <button onClick={() => setStep(1)} className="px-6 py-4 bg-neutral-800 rounded-xl font-bold text-neutral-400 hover:text-white hover:bg-neutral-700 transition">Back</button>
-                        <button onClick={handleSubmit} disabled={loading} className="flex-1 bg-blue-600 text-white font-bold py-4 rounded-xl flex items-center justify-center hover:bg-blue-500 transition shadow-[0_0_20px_rgba(37,99,235,0.3)]">
-                            {loading ? <Loader2 className="animate-spin" /> : "Complete Registration"} 
+                        <button onClick={() => setStep(1)} className="px-6 py-4 bg-neutral-800 rounded-xl font-bold text-neutral-400 hover:text-white transition">Back</button>
+                        <button onClick={() => { if(capturedImage && idFile) setStep(3); else setError("Please complete verification."); }} className="flex-1 bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center hover:bg-gray-200 transition">
+                            Verify & Proceed <ChevronRight size={18} className="ml-2"/>
                         </button>
                     </div>
                 </div>
             )}
+
+            {/* --- STEP 3: ADMIN CALL & OTP --- */}
+            {step === 3 && (
+                <div className="space-y-6 animate-in slide-in-from-right text-center">
+                    <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto border border-yellow-500/30">
+                        <Shield size={40} className="text-yellow-500"/>
+                    </div>
+                    
+                    <div>
+                        <h3 className="text-xl font-bold text-white">Pending Admin Approval</h3>
+                        <p className="text-neutral-400 text-sm mt-2 leading-relaxed">
+                            To ensure safety, a <b>Video Call</b> with an Admin is required. <br/>
+                            After the call, they will share a <b>6-digit code</b>.
+                        </p>
+                    </div>
+
+                    <div className="bg-[#111] p-4 rounded-xl border border-neutral-800 text-left">
+                        <p className="text-xs font-bold text-neutral-500 uppercase mb-2">Instructions</p>
+                        <ul className="text-sm text-neutral-300 space-y-2 list-disc pl-4">
+                            <li>Keep your ID proof ready.</li>
+                            <li>Join the call link sent to your email.</li>
+                            <li>Enter the code provided by the Admin below.</li>
+                        </ul>
+                    </div>
+
+                    <div className="relative group">
+                        <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500/70" size={18} />
+                        <input 
+                            name="adminCode" 
+                            type="text" 
+                            maxLength="6"
+                            placeholder="Enter 6-Digit Admin Code" 
+                            className="w-full bg-yellow-900/5 border border-yellow-500/20 rounded-xl py-4 pl-12 pr-4 text-sm text-yellow-100 placeholder-yellow-500/30 focus:outline-none focus:border-yellow-500/50 transition font-mono tracking-widest text-center" 
+                            onChange={handleChange} 
+                            value={formData.adminCode}
+                        />
+                    </div>
+
+                    <div className="flex gap-3">
+                        <button onClick={() => setStep(2)} className="px-6 py-4 bg-neutral-800 rounded-xl font-bold text-neutral-400 hover:text-white transition">Back</button>
+                        <button onClick={handleSubmit} disabled={loading} className="flex-1 bg-green-600 text-white font-bold py-4 rounded-xl flex items-center justify-center hover:bg-green-500 transition shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+                            {loading ? <Loader2 className="animate-spin" /> : "Verify Code & Register"} 
+                        </button>
+                    </div>
+                </div>
+            )}
+
         </div>
     </div>
   );
