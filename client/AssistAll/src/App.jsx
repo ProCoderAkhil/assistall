@@ -22,20 +22,14 @@ import LandingPage from './components/LandingPage';
 import AppLoader from './components/AppLoader'; 
 import SOSModal from './components/SOSModal'; 
 
-// FIXED URL
 const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
 
-const initialNotifs = [
-    { id: 1, title: "Ride Completed", msg: "Trip successful.", time: "10m ago", type: 'success' }
-];
-
 function App() {
-  // ⚠️ PERSISTENT LOGIN LOGIC
+  // 1. PERSISTENT LOGIN
   const [user, setUser] = useState(() => {
       try {
-          // Check Local Storage immediately on app launch
           const savedUser = localStorage.getItem('user');
           const savedToken = localStorage.getItem('token');
           if (savedUser && savedUser !== "undefined" && savedToken) {
@@ -50,7 +44,7 @@ function App() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [step, setStep] = useState('selecting'); 
-  const [activeRequestId, setActiveRequestId] = useState(null);
+  const [activeRequestId, setActiveRequestId] = useState(() => localStorage.getItem('activeRideId'));
   const [acceptedRequestData, setAcceptedRequestData] = useState(null);
   const [showSOS, setShowSOS] = useState(false);
   const [toast, setToast] = useState(null); 
@@ -59,18 +53,21 @@ function App() {
 
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
 
-  // ⚠️ AUTO-REDIRECT: If logged in, don't show login page
+  // 2. LOADING SCREEN
   useEffect(() => { 
-      setTimeout(() => setIsLoading(false), 1000);
-      
-      if (user && (location.pathname === '/login' || location.pathname === '/' || location.pathname === '/register')) {
+      setTimeout(() => setIsLoading(false), 2500); // Show Loader for 2.5s
+  }, []);
+
+  // 3. AUTO-REDIRECT LOGIC
+  useEffect(() => {
+      if (!isLoading && user && (location.pathname === '/login' || location.pathname === '/' || location.pathname === '/register')) {
           if (user.role === 'admin') navigate('/admin');
           else if (user.role === 'volunteer') navigate('/volunteer');
           else navigate('/home');
       }
-  }, [user, location.pathname]);
+  }, [user, isLoading, location.pathname, navigate]);
 
-  // Polling for Updates
+  // 4. POLLING FOR UPDATES
   useEffect(() => {
     if (!activeRequestId) return;
     const interval = setInterval(async () => {
@@ -104,10 +101,11 @@ function App() {
       else navigate('/home');
   };
 
+  // ⚠️ CRITICAL FIX: HARD RELOAD ON LOGOUT
   const handleLogout = () => { 
       localStorage.clear(); 
       setUser(null); 
-      navigate('/'); 
+      window.location.href = "/"; // Forces a full reload to Landing Page
   };
 
   const handleFindVolunteer = async (bookingDetails) => { 
@@ -117,10 +115,14 @@ function App() {
         method: 'POST', headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             requesterName: user.name, requesterId: user._id, type: bookingDetails.type, 
-            dropOffLocation: bookingDetails.dropOff, location: { lat: 9.5916, lng: 76.5222 } 
+            dropOffLocation: bookingDetails.dropOff, location: { lat: 9.5916, lng: 76.5222 },
+            // Pass scheduling data if present
+            isScheduled: bookingDetails.isScheduled,
+            scheduledTime: bookingDetails.scheduledTime
         }),
       });
       const data = await res.json();
+      localStorage.setItem('activeRideId', data._id);
       setActiveRequestId(data._id);
   } catch (err) { showToast("Network Error", "error"); setStep('selecting'); }
   };
@@ -139,31 +141,37 @@ function App() {
         <Route path="/register" element={<UserSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
         <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
 
-        {/* PROTECTED ROUTES */}
-        <Route path="/home" element={user ? (
+        {/* PROTECTED USER ROUTES */}
+        <Route path="/home" element={user && user.role === 'user' ? (
             <>
                 <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
                 <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
                     <button onClick={() => navigate('/profile')} className="pointer-events-auto w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex justify-center items-center border border-white/10"><Menu size={20}/></button>
                     <div className="flex gap-3 pointer-events-auto">
                         <button className="w-10 h-10 bg-[#0a0a0a]/90 backdrop-blur-xl rounded-full flex justify-center items-center border border-white/10"><Bell size={18}/></button>
-                        <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex justify-center items-center animate-pulse"><Shield size={18}/></button>
+                        <button onClick={() => setShowSOS(true)} className="w-10 h-10 bg-red-600 rounded-full flex justify-center items-center animate-pulse shadow-lg shadow-red-900/50"><Shield size={18}/></button>
                     </div>
                 </div>
                 {step === 'selecting' && <ServiceSelector onClose={() => {}} onFindClick={handleFindVolunteer} user={user} />}
-                {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => setStep('selecting')} />}
+                {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => { localStorage.removeItem('activeRideId'); setActiveRequestId(null); setStep('selecting'); }} />}
                 {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
                 {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
-                {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => setStep('selecting')} onSubmit={() => setStep('selecting')} />}
+                {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} onSubmit={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} showToast={showToast} />}
+                
                 <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
-                <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => setShowSOS(false)} />
+                <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => { setShowSOS(false); showToast("SOS Alert Sent to Police!", "error"); }} />
             </>
         ) : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
 
-        <Route path="/profile" element={<UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} />} />
-        <Route path="/activity" element={<div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div>} />
-        <Route path="/volunteer" element={<VolunteerDashboard user={user} globalToast={showToast} />} />
-        <Route path="/admin" element={<AdminPanel onLogout={handleLogout} />} />
+        {/* PROTECTED SHARED ROUTES */}
+        <Route path="/profile" element={user ? <UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+        <Route path="/activity" element={user ? <div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+        
+        {/* VOLUNTEER DASHBOARD */}
+        <Route path="/volunteer" element={user && user.role === 'volunteer' ? <VolunteerDashboard user={user} globalToast={showToast} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+        
+        {/* ADMIN PANEL */}
+        <Route path="/admin" element={user && user.role === 'admin' ? <AdminPanel onLogout={handleLogout} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
       </Routes>
     </div>
   );
