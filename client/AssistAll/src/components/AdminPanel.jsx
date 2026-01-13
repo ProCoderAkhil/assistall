@@ -14,7 +14,6 @@ const AdminPanel = ({ onLogout }) => {
   const [generatedCode, setGeneratedCode] = useState("------"); 
   const [notifications, setNotifications] = useState([]); 
 
-  // ⚠️ FIXED URL
   const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
       ? 'http://localhost:5000' 
       : 'https://assistall-server.onrender.com';
