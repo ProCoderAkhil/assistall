@@ -1,94 +1,62 @@
-import express from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js'; 
-import AccessCode from '../models/AccessCode.js'; 
-
+const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const AccessCode = require('../models/AccessCode');
 
-// --- REGISTER ---
+// REGISTER
 router.post('/register', async (req, res) => {
+  const { name, email, password, role, govtId, address, phone, adminCode } = req.body;
+
   try {
-    const { name, email, password, role, govtId, adminCode } = req.body;
+    let user = await User.findOne({ email });
+    if (user) return res.status(400).json({ message: 'User already exists' });
 
-    if (!name || !email || !password) return res.status(400).json({ message: "Fill all fields." });
-
-    const emailClean = email.trim().toLowerCase();
-    
-    const existing = await User.findOne({ email: emailClean });
-    if (existing) return res.status(400).json({ message: "User exists." });
-
-    let finalRole = role || 'user';
     let isVerified = false;
-
-    // Admin Logic
-    if (emailClean === 'admin@assistall.com') {
-        finalRole = 'admin';
-        isVerified = true;
-    } else if (finalRole === 'volunteer') {
-        if (!adminCode) return res.status(400).json({ message: "Admin Code required." });
-        const validCode = await AccessCode.findOne({ code: adminCode, isUsed: false });
-        if (!validCode) return res.status(403).json({ message: "Invalid Code." });
-        validCode.isUsed = true;
-        await validCode.save();
-        isVerified = true;
+    
+    if (role === 'volunteer') {
+        if (!adminCode) return res.status(400).json({ message: 'Verification Code Required' });
+        const validCode = await AccessCode.findOne({ code: adminCode });
+        if (!validCode) return res.status(400).json({ message: 'Invalid Verification Code' });
+        isVerified = false; // Pending manual approval
     }
 
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password.trim(), salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = new User({
-      name: name.trim(),
-      email: emailClean,
-      password: hashedPassword,
-      role: finalRole,
-      govtId,
-      isVerified
+    user = new User({
+      name, email, password: hashedPassword, role,
+      govtId, address, phone,
+      isVerified: role === 'user' ? true : isVerified, 
+      verificationStatus: role === 'volunteer' ? 'pending' : 'approved'
     });
 
-    await newUser.save();
+    await user.save();
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-    // ⚠️ 30 DAY TOKEN
-    const token = jwt.sign(
-        { id: newUser._id, role: newUser.role },
-        process.env.JWT_SECRET || "fallback_secret", 
-        { expiresIn: "30d" }
-    );
+    res.status(201).json({ token, user: { _id: user._id, name: user.name, email: user.email, role: user.role, isVerified: user.isVerified } });
 
-    res.status(201).json({ user: newUser, token });
-
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { res.status(500).json({ message: 'Server Error' }); }
 });
 
-// --- LOGIN ---
+// LOGIN
 router.post('/login', async (req, res) => {
-  try {
-    const emailClean = req.body.email.trim().toLowerCase();
-    const user = await User.findOne({ email: emailClean });
-    
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const { email, password } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ message: 'Invalid Credentials' });
 
-    const validPass = await bcrypt.compare(req.body.password.trim(), user.password);
-    if (!validPass) return res.status(400).json({ message: "Invalid password" });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ message: 'Invalid Credentials' });
 
-    // Auto-Fix Admin Role
-    if (emailClean === 'admin@assistall.com' && user.role !== 'admin') {
-        user.role = 'admin';
-        user.isVerified = true;
-        await user.save();
-    }
+        if (user.role === 'volunteer' && !user.isVerified) {
+            return res.status(403).json({ message: 'Account Pending Admin Approval' });
+        }
 
-    // ⚠️ 30 DAY TOKEN (PERSISTENT LOGIN)
-    const token = jwt.sign(
-        { id: user._id, role: user.role },
-        process.env.JWT_SECRET || "fallback_secret", 
-        { expiresIn: "30d" }
-    );
-
-    const { password, ...others } = user._doc;
-    res.status(200).json({ ...others, token });
-
-  } catch (err) { res.status(500).json({ message: err.message }); }
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
+        res.json({ token, user: { _id: user._id, name: user.name, role: user.role, isVerified: user.isVerified } });
+    } catch (err) { res.status(500).json({ message: 'Server Error' }); }
 });
 
-export default router;
+module.exports = router;

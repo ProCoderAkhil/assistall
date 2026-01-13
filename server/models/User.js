@@ -1,15 +1,23 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'volunteer', 'admin'], default: 'user' },
   phone: { type: String },
+  address: { type: String },
+  role: { type: String, enum: ['user', 'volunteer', 'admin'], default: 'user' },
+  
+  // Verification Fields
   govtId: { type: String },
-  isVerified: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  isVerified: { type: Boolean, default: false }, 
+  verificationStatus: { 
+    type: String, 
+    enum: ['pending', 'interview_scheduled', 'approved', 'rejected'], 
+    default: 'pending' 
+  },
+  
+  createdAt: { type: Date, default: Date.now },
 });
 
-const User = mongoose.model('User', UserSchema);
-export default User;
+module.exports = mongoose.model('User', UserSchema);

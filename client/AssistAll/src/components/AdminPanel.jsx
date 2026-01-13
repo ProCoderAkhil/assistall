@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Users, Car, Settings, LogOut, 
-  CreditCard, Shield, Activity, Search, Bell, Menu, 
-  RefreshCw, CheckCircle, XCircle, AlertTriangle, MoreVertical, 
-  Filter, Key, Power, Star, Phone, Video
+  LayoutDashboard, Users, Car, Settings, LogOut, Shield, Activity, Bell, Menu, 
+  RefreshCw, CheckCircle, XCircle, AlertTriangle, Key, Power, Star, Phone, Video, Mail
 } from 'lucide-react';
 
 const AdminPanel = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState({ volunteers: 0, users: 0, rides: 0, earnings: 0, recent: [] });
   const [volunteers, setVolunteers] = useState([]);
-  const [pendingVerifications, setPendingVerifications] = useState([]); // NEW
+  const [pendingVerifications, setPendingVerifications] = useState([]);
   const [allRides, setAllRides] = useState([]);
   const [generatedCode, setGeneratedCode] = useState("------"); 
   const [notifications, setNotifications] = useState([]); 
@@ -30,15 +28,13 @@ const AdminPanel = ({ onLogout }) => {
         const resStats = await fetch(`${DEPLOYED_API_URL}/api/admin/stats`);
         if(resStats.ok) setStats(await resStats.json());
 
-        // Fetch Volunteers
         const resVol = await fetch(`${DEPLOYED_API_URL}/api/admin/volunteers`);
         if(resVol.ok) {
             const data = await resVol.json();
             setVolunteers(data);
-            setPendingVerifications(data.filter(v => !v.isVerified)); // Filter pending
+            setPendingVerifications(data.filter(v => !v.isVerified));
         }
 
-        // Fetch Code
         const resCode = await fetch(`${DEPLOYED_API_URL}/api/admin/code`);
         if(resCode.ok) {
             const data = await resCode.json();
@@ -51,10 +47,7 @@ const AdminPanel = ({ onLogout }) => {
 
   const generateCode = async () => {
     try {
-        const res = await fetch(`${DEPLOYED_API_URL}/api/admin/generate-code`, { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
+        const res = await fetch(`${DEPLOYED_API_URL}/api/admin/generate-code`, { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
             setGeneratedCode(data.code);
@@ -63,50 +56,50 @@ const AdminPanel = ({ onLogout }) => {
     } catch(e) { addNotification("Error generating code", "error"); }
   };
 
+  const sendInvite = async (email) => {
+    const meetingLink = prompt("Enter Google Meet/Zoom Link:");
+    if (!meetingLink) return;
+
+    try {
+        const res = await fetch(`${DEPLOYED_API_URL}/api/admin/send-invite`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, meetingLink })
+        });
+        if (res.ok) addNotification(`Invite sent to ${email}`, "success");
+        else addNotification("Failed to send email", "error");
+    } catch (e) { addNotification("Network Error", "error"); }
+  };
+
   const approveVolunteer = async (id) => {
-      // In a real app, this might just mark them as 'Interviewed'. 
-      // The final registration happens when THEY enter the code.
-      // But for admin control, let's mark them verified manually if needed.
       try {
           await fetch(`${DEPLOYED_API_URL}/api/admin/verify/${id}`, { method: 'PUT' });
-          addNotification("Volunteer Verified!", "success");
+          addNotification("Volunteer Verified & Email Sent!", "success");
           fetchData();
       } catch(e) { addNotification("Failed", "error"); }
   };
 
   // --- VIEWS ---
-
   const DashboardView = () => (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in">
-          {/* Stats Cards (Same as before) */}
           <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800"><h3 className="text-neutral-500 text-xs font-bold uppercase">Total Users</h3><p className="text-3xl font-black text-white">{stats.users}</p></div>
-          <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800"><h3 className="text-neutral-500 text-xs font-bold uppercase">Pending Verifications</h3><p className="text-3xl font-black text-yellow-500">{pendingVerifications.length}</p></div>
+          <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800"><h3 className="text-neutral-500 text-xs font-bold uppercase">Pending</h3><p className="text-3xl font-black text-yellow-500">{pendingVerifications.length}</p></div>
           <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800"><h3 className="text-neutral-500 text-xs font-bold uppercase">Active OTP</h3><p className="text-3xl font-black text-green-500 tracking-widest font-mono">{generatedCode}</p></div>
       </div>
   );
 
   const VerificationView = () => (
     <div className="space-y-6 animate-in slide-in-from-right">
-        {/* OTP Generator Panel */}
         <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-8 rounded-3xl border border-blue-500/30 flex justify-between items-center">
-            <div>
-                <h3 className="text-2xl font-bold text-white mb-2">Live Interview Session</h3>
-                <p className="text-neutral-400 text-sm">Generate a code to share with the volunteer during the call.</p>
-            </div>
+            <div><h3 className="text-2xl font-bold text-white mb-2">Live Interview Session</h3><p className="text-neutral-400 text-sm">Generate a code to share with the volunteer during the call.</p></div>
             <div className="text-right">
                 <div className="text-5xl font-mono font-black text-white tracking-widest mb-4 bg-black/50 px-6 py-2 rounded-xl border border-white/10">{generatedCode}</div>
-                <button onClick={generateCode} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-500 transition flex items-center gap-2 ml-auto">
-                    <RefreshCw size={18}/> Generate New OTP
-                </button>
+                <button onClick={generateCode} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-500 transition flex items-center gap-2 ml-auto"><RefreshCw size={18}/> Generate New OTP</button>
             </div>
         </div>
 
-        {/* Pending List */}
         <div className="bg-neutral-900 rounded-3xl border border-neutral-800 overflow-hidden">
-            <div className="p-6 border-b border-neutral-800 flex justify-between">
-                <h3 className="font-bold text-white">Pending Verification Queue</h3>
-                <span className="bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full text-xs font-bold">{pendingVerifications.length} Waiting</span>
-            </div>
+            <div className="p-6 border-b border-neutral-800 flex justify-between"><h3 className="font-bold text-white">Pending Verification Queue</h3><span className="bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full text-xs font-bold">{pendingVerifications.length} Waiting</span></div>
             <table className="w-full text-left">
                 <thead className="bg-black text-neutral-500 text-xs uppercase font-bold"><tr><th className="p-4">Name</th><th className="p-4">Docs</th><th className="p-4">Status</th><th className="p-4 text-right">Action</th></tr></thead>
                 <tbody className="divide-y divide-neutral-800 text-sm text-neutral-300">
@@ -116,8 +109,8 @@ const AdminPanel = ({ onLogout }) => {
                             <td className="p-4"><span className="flex items-center gap-1 text-green-400"><CheckCircle size={14}/> Uploaded</span></td>
                             <td className="p-4"><span className="bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded text-xs border border-yellow-500/20">Interview Pending</span></td>
                             <td className="p-4 text-right flex justify-end gap-2">
-                                <button className="p-2 bg-blue-600/20 text-blue-500 rounded-lg hover:bg-blue-600/30" title="Start Video Call"><Video size={18}/></button>
-                                <button onClick={() => approveVolunteer(v._id)} className="p-2 bg-green-600/20 text-green-500 rounded-lg hover:bg-green-600/30" title="Manual Approve"><CheckCircle size={18}/></button>
+                                <button onClick={() => sendInvite(v.email)} className="p-2 bg-purple-600/20 text-purple-500 rounded-lg hover:bg-purple-600/30" title="Send Email Invite"><Mail size={18}/></button>
+                                <button onClick={() => approveVolunteer(v._id)} className="p-2 bg-green-600/20 text-green-500 rounded-lg hover:bg-green-600/30" title="Approve"><CheckCircle size={18}/></button>
                             </td>
                         </tr>
                     ))}
@@ -130,7 +123,6 @@ const AdminPanel = ({ onLogout }) => {
 
   return (
     <div className="min-h-screen bg-black font-sans flex text-gray-100 overflow-hidden">
-      {/* Sidebar */}
       <div className="w-64 bg-neutral-900 border-r border-neutral-800 p-6 flex flex-col">
         <div className="flex items-center mb-10 text-white font-black text-xl"><Shield className="mr-2 text-blue-500"/> Admin Panel</div>
         <nav className="space-y-2 flex-1">
@@ -139,26 +131,13 @@ const AdminPanel = ({ onLogout }) => {
         </nav>
         <button onClick={onLogout} className="text-red-500 font-bold flex items-center p-3 hover:bg-red-900/20 rounded-xl"><LogOut size={20} className="mr-3"/> Sign Out</button>
       </div>
-
-      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-8">
-          <header className="flex justify-between items-center mb-8">
-              <h1 className="text-3xl font-black text-white capitalize">{activeTab}</h1>
-              <div className="flex items-center gap-4"><Bell className="text-neutral-400"/><div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-full"></div></div>
-          </header>
-          
-          {/* Notifications */}
-          <div className="fixed top-5 right-5 z-50 space-y-2">
-              {notifications.map(n => (
-                  <div key={n.id} className={`px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2 ${n.type==='error'?'bg-red-900 border-red-500':'bg-neutral-800 border-neutral-700'}`}>{n.message}</div>
-              ))}
-          </div>
-
+          <header className="flex justify-between items-center mb-8"><h1 className="text-3xl font-black text-white capitalize">{activeTab}</h1><div className="flex items-center gap-4"><Bell className="text-neutral-400"/><div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-full"></div></div></header>
+          <div className="fixed top-5 right-5 z-50 space-y-2">{notifications.map(n => (<div key={n.id} className={`px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2 ${n.type==='error'?'bg-red-900 border-red-500':'bg-neutral-800 border-neutral-700'}`}>{n.message}</div>))}</div>
           {activeTab === 'dashboard' && <DashboardView/>}
           {activeTab === 'verification' && <VerificationView/>}
       </div>
     </div>
   );
 };
-
 export default AdminPanel;
