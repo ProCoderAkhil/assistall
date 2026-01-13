@@ -11,10 +11,10 @@ const DEPLOYED_API_URL = window.location.hostname === 'localhost'
     : 'https://assistall-server.onrender.com';
 
 // ==========================================
-// 1. NEW COMPONENT: Top Notification Banner
+// 1. NOTIFICATION BANNER (Top Overlay)
 // ==========================================
 const StatusBanner = ({ status }) => {
-  if (!status) return null;
+  if (!status || status === 'pending') return null;
   
   let bg = "bg-blue-600";
   let text = "Updating...";
@@ -28,10 +28,6 @@ const StatusBanner = ({ status }) => {
       bg = "bg-blue-600";
       text = "RIDE STARTED - HEADING TO DESTINATION";
       icon = <Navigation size={16} />;
-  } else if (status === 'completed') {
-      bg = "bg-black";
-      text = "RIDE COMPLETED";
-      icon = <Star size={16} />;
   }
 
   return (
@@ -43,7 +39,7 @@ const StatusBanner = ({ status }) => {
 };
 
 // ==========================================
-// 2. SUB-COMPONENTS
+// 2. SUB-COMPONENTS (Your Designs Integrated)
 // ==========================================
 
 const FindingVolunteer = ({ onCancel }) => (
@@ -147,7 +143,7 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
 };
 
 // ==========================================
-// 3. MAIN DASHBOARD CONTROLLER (V39)
+// 3. MAIN DASHBOARD CONTROLLER (V40 - The Fix)
 // ==========================================
 const UserDashboard = () => {
   const [step, setStep] = useState('menu'); // 'menu' | 'input' | 'searching' | 'arriving' | 'riding' | 'rating'
@@ -186,7 +182,7 @@ const UserDashboard = () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
   };
 
-  // --- V39 POLLING ENGINE ---
+  // --- V40 STABLE POLLING ENGINE ---
   useEffect(() => {
     if (!rideId || step === 'menu') return;
 
@@ -207,7 +203,7 @@ const UserDashboard = () => {
             // If the server status matches what we already know, DO NOTHING.
             if (serverStatus === lastKnownStatus.current) return;
 
-            console.log(`State Change: ${lastKnownStatus.current} -> ${serverStatus}`);
+            console.log(`State Change Detected: ${lastKnownStatus.current} -> ${serverStatus}`);
             lastKnownStatus.current = serverStatus; // Update Memory
             setRideData(myRide); // Update Data
 
@@ -229,12 +225,12 @@ const UserDashboard = () => {
     }, 2000); // Poll every 2s
 
     return () => clearInterval(pollingRef.current);
-  }, [rideId]);
+  }, [rideId]); // Only restart if rideID changes, NOT step
 
   return (
     <div className="h-screen bg-neutral-100 text-black font-sans flex flex-col relative overflow-hidden">
       
-      {/* GLOBAL BANNER NOTIFICATION (V39 Feature) */}
+      {/* GLOBAL BANNER NOTIFICATION */}
       {(step === 'arriving' || step === 'riding' || step === 'rating') && (
           <StatusBanner status={lastKnownStatus.current} />
       )}
