@@ -1,93 +1,79 @@
-const router = require('express').Router();
+const express = require('express');
+const router = express.Router();
 const Request = require('../models/Request');
 
-// 1. UPDATE PAYMENT & TIP
+// 1. GET ALL REQUESTS (Simplified for reliability)
+router.get('/', async (req, res) => {
+    try {
+        // Return ALL requests sorted by newest first
+        // The frontend will handle filtering (pending vs active)
+        const requests = await Request.find().sort({ createdAt: -1 });
+        res.status(200).json(requests);
+    } catch (err) {
+        console.error("Error fetching requests:", err);
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+// 2. CREATE REQUEST (Ensures 'drop' is saved correctly)
+router.post('/', async (req, res) => {
+    try {
+        console.log("New Request Data:", req.body); // Debug log
+        const newRequest = new Request({
+            requesterName: req.body.requesterName || "User",
+            requesterId: req.body.requesterId, // Added ID tracking
+            type: req.body.type || 'Ride',
+            price: req.body.price || 150,
+            status: 'pending',
+            pickup: req.body.pickup || "Kottayam",
+            drop: req.body.drop || "Hospital" // Ensure this matches UserDashboard payload
+        });
+        const savedRequest = await newRequest.save();
+        res.status(201).json(savedRequest);
+    } catch (err) {
+        res.status(500).json({ message: "Failed to create request" });
+    }
+});
+
+// 3. RIDE ACTIONS (Accept, Pickup, Complete)
+router.put('/:id/:action', async (req, res) => {
+    try {
+        const { action } = req.params;
+        const ride = await Request.findById(req.params.id);
+        
+        if (!ride) return res.status(404).json({ message: "Not Found" });
+
+        if (action === 'accept') {
+            // Prevent double booking
+            if (ride.status !== 'pending') return res.status(400).json({ message: "Ride already taken" });
+            
+            ride.status = 'accepted';
+            ride.volunteerName = req.body.volunteerName;
+            ride.volunteerId = req.body.volunteerId;
+        } 
+        else if (action === 'pickup') {
+            ride.status = 'in_progress';
+        }
+        else if (action === 'complete') {
+            ride.status = 'completed';
+        }
+
+        await ride.save();
+        res.json(ride);
+    } catch (err) {
+        res.status(500).json({ message: "Action Failed" });
+    }
+});
+
+// 4. Update Payment/Tip
 router.put('/:id/tip', async (req, res) => {
     try {
         const updated = await Request.findByIdAndUpdate(req.params.id, { 
             tip: req.body.amount,
-            paymentMethod: req.body.paymentMethod // <--- Saving 'cash' or 'online'
+            paymentMethod: req.body.paymentMethod 
         }, { new: true });
         res.json(updated);
     } catch (err) { res.status(500).json(err); }
-});
-
-// 2. GET EARNINGS
-router.get('/earnings/:volunteerId', async (req, res) => {
-    try {
-        const jobs = await Request.find({ 
-            volunteerId: req.params.volunteerId, 
-            status: 'completed',
-            payoutStatus: 'unpaid'
-        });
-
-        let totalBase = 0;
-        let totalTips = 0;
-
-        jobs.forEach(job => {
-            // Include cash payments in earnings history, but marks them differently in real apps
-            // For this demo, we assume cash is kept by volunteer and online is transferred
-            totalBase += (job.price || 0);
-            totalTips += (job.tip || 0);
-        });
-
-        res.json({ total: totalBase + totalTips, base: totalBase, tips: totalTips, jobs: jobs.length });
-    } catch (err) { res.status(500).json(err); }
-});
-
-// 3. WITHDRAW
-router.post('/withdraw/:volunteerId', async (req, res) => {
-    try {
-        await Request.updateMany(
-            { volunteerId: req.params.volunteerId, status: 'completed', payoutStatus: 'unpaid' },
-            { $set: { payoutStatus: 'paid' } }
-        );
-        res.json({ success: true });
-    } catch (err) { res.status(500).json(err); }
-});
-
-// 4. CREATE REQUEST
-router.post('/', async (req, res) => {
-  try {
-    const distanceVal = (Math.random() * 5 + 2).toFixed(1); 
-    const priceVal = Math.floor(40 + (distanceVal * 15)); 
-    const newRequest = new Request({
-        ...req.body,
-        distance: `${distanceVal} km`,
-        price: priceVal,
-        eta: `${Math.floor(distanceVal * 1.5) + 2} mins`,
-        tip: 0,
-        paymentMethod: 'pending'
-    });
-    const savedRequest = await newRequest.save();
-    res.status(200).json(savedRequest);
-  } catch (err) { res.status(500).json(err); }
-});
-
-// 5. STANDARD ROUTES
-router.get('/', async (req, res) => {
-  try { const requests = await Request.find(); res.status(200).json(requests); } catch (err) { res.status(500).json(err); }
-});
-
-router.get('/history/:userId', async (req, res) => {
-  try {
-    const history = await Request.find({ 
-      $or: [{ requesterId: req.params.userId }, { volunteerId: req.params.userId }]
-    }).sort({ createdAt: -1 });
-    res.status(200).json(history);
-  } catch (err) { res.status(500).json(err); }
-});
-
-router.put('/:id/accept', async (req, res) => {
-  try { const updated = await Request.findByIdAndUpdate(req.params.id, { status: 'accepted', volunteerName: req.body.volunteerName, volunteerId: req.body.volunteerId }, { new: true }); res.status(200).json(updated); } catch (err) { res.status(500).json(err); }
-});
-
-router.put('/:id/pickup', async (req, res) => {
-  const updated = await Request.findByIdAndUpdate(req.params.id, { status: 'in_progress' }, { new: true }); res.json(updated);
-});
-
-router.put('/:id/complete', async (req, res) => {
-  const updated = await Request.findByIdAndUpdate(req.params.id, { status: 'completed' }, { new: true }); res.json(updated);
 });
 
 module.exports = router;

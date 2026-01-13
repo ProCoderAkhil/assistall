@@ -6,18 +6,20 @@ const ServiceSelector = ({ onClose, onFindClick, user }) => {
   const [dropOff, setDropOff] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // 🏥 KOTTAYAM HOSPITALS LIST
+  // 🏥 LIST OF HOSPITALS (Searchable Dropdown)
   const hospitals = [
-      "Government Medical College, Gandhinagar",
-      "General Hospital, Kottayam",
+      "Government Medical College, Kottayam",
       "Caritas Hospital, Thellakom",
       "Matha Hospital, Thellakom",
+      "General Hospital, Kottayam",
       "KIMS Health, Kudamaloor",
       "Mandiram Hospital, Manganam",
       "Bharath Hospital, Kottayam",
       "S H Medical Centre, Nagampadam",
       "Mitera Hospital, Thellakom",
-      "Indo-American Hospital, Vaikom"
+      "Indo-American Hospital, Vaikom",
+      "Marian Medical Centre, Pala",
+      "St. Thomas Hospital, Chethipuzha"
   ];
 
   const services = [
@@ -37,20 +39,20 @@ const ServiceSelector = ({ onClose, onFindClick, user }) => {
             </div>
 
             <div className="p-6 pt-2">
-                {/* 🏥 HOSPITAL SEARCH / INPUT */}
+                {/* 🏥 HOSPITAL SEARCH INPUT */}
                 <div className="relative mb-8 group">
                     <div className="bg-[#1a1a1a] p-4 rounded-2xl flex items-center border border-white/5 focus-within:border-green-500 transition-all shadow-lg">
                         <div className="bg-green-600/20 text-green-500 p-2 rounded-xl mr-3"><Search size={20}/></div>
                         <input 
                             type="text" 
-                            list="hospital-list" // Connects to datalist below
-                            placeholder="Where to? (e.g. Caritas Hospital)" 
+                            list="hospital-list" // Connects to the datalist below
+                            placeholder="Where to? (e.g. Medical College)" 
                             className="w-full bg-transparent outline-none font-bold text-lg text-white placeholder-neutral-600" 
                             value={dropOff} 
                             onChange={(e) => setDropOff(e.target.value)}
                         />
                     </div>
-                    {/* Native Datalist for Dropdown */}
+                    {/* Native Datalist for Dropdown Suggestions */}
                     <datalist id="hospital-list">
                         {hospitals.map((h, i) => <option key={i} value={h} />)}
                     </datalist>
