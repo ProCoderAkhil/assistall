@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
   User, Mail, Lock, Shield, ArrowLeft, Loader2, Key, 
-  Camera, Upload, X, FileText, ChevronRight, MapPin, Phone, Video
+  Camera, Upload, X, FileText, ChevronRight, MapPin, Phone, Video, Stethoscope
 } from 'lucide-react';
 
 const VolunteerSignup = ({ onRegister, onBack }) => {
@@ -9,6 +9,11 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', govtId: '', address: '', phone: '', adminCode: '' });
   const [capturedImage, setCapturedImage] = useState(null);
   const [idFile, setIdFile] = useState(null);
+  
+  // NEW: Geriatric State
+  const [isGeriatric, setIsGeriatric] = useState(false);
+  const [certFile, setCertFile] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -29,7 +34,14 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
     try {
       const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, role: 'volunteer' })
+        body: JSON.stringify({ 
+            ...formData, 
+            role: 'volunteer',
+            isGeriatricTrained: isGeriatric,
+            // In a real app, you'd upload files to S3/Cloudinary and send URLs here.
+            // For this demo, we are just sending the flag.
+            trainingCertificate: certFile ? certFile.name : ''
+        })
       });
       const data = await res.json();
       if (res.ok) onRegister(data.user, data.token);
@@ -45,19 +57,18 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
         <div className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] p-8 rounded-[32px] shadow-2xl relative z-10 animate-in zoom-in duration-300">
             <button onClick={onBack} className="absolute top-6 left-6 p-2 rounded-full hover:bg-[#222] transition text-gray-500 hover:text-white"><ArrowLeft size={20}/></button>
             
-            {/* Steps Indicator */}
             <div className="flex justify-center gap-2 mb-8 mt-2">
                 {[1,2,3].map(i => <div key={i} className={`h-1 w-12 rounded-full transition-all ${step >= i ? 'bg-blue-600' : 'bg-[#222]'}`}></div>)}
             </div>
 
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-black">{step === 1 ? "Partner Details" : step === 2 ? "Identity Check" : "Admin Approval"}</h2>
+                <h2 className="text-2xl font-black">{step === 1 ? "Partner Details" : step === 2 ? "Qualifications" : "Admin Approval"}</h2>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Step {step} of 3</p>
             </div>
 
             {error && <div className="bg-red-900/20 text-red-500 p-3 rounded-xl text-center text-sm font-bold mb-6 border border-red-900/50">{error}</div>}
 
-            {/* STEP 1 */}
+            {/* STEP 1: Details */}
             {step === 1 && (
                 <div className="space-y-4 animate-in slide-in-from-right">
                     <div className="grid grid-cols-2 gap-4">
@@ -71,20 +82,43 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                 </div>
             )}
 
-            {/* STEP 2 */}
+            {/* STEP 2: Identity & Certificates */}
             {step === 2 && (
                 <div className="space-y-4 animate-in slide-in-from-right">
-                    <div className="bg-[#111] h-48 rounded-xl border border-[#222] flex items-center justify-center overflow-hidden relative">
-                        {isCameraOpen ? <video ref={videoRef} autoPlay className="w-full h-full object-cover"/> : capturedImage ? <img src={capturedImage} className="w-full h-full object-cover"/> : <Camera size={32} className="text-gray-600"/>}
-                        {!isCameraOpen && !capturedImage && <button onClick={startCamera} className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-400 hover:text-white">Tap to take selfie</button>}
-                        {isCameraOpen && <button onClick={capturePhoto} className="absolute bottom-4 bg-white text-black px-6 py-2 rounded-full font-bold">Capture</button>}
+                    {/* Selfie Section */}
+                    <div className="bg-[#111] h-32 rounded-xl border border-[#222] flex items-center justify-center overflow-hidden relative">
+                        {isCameraOpen ? <video ref={videoRef} autoPlay className="w-full h-full object-cover"/> : capturedImage ? <img src={capturedImage} className="w-full h-full object-cover"/> : <Camera size={24} className="text-gray-600"/>}
+                        {!isCameraOpen && !capturedImage && <button onClick={startCamera} className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-400 hover:text-white">Tap to take selfie</button>}
+                        {isCameraOpen && <button onClick={capturePhoto} className="absolute bottom-2 bg-white text-black px-4 py-1 text-xs rounded-full font-bold">Capture</button>}
                         <canvas ref={canvasRef} className="hidden"/>
                     </div>
-                    <div className="bg-[#111] p-4 rounded-xl border border-[#222] flex items-center gap-4 cursor-pointer hover:border-blue-600 transition" onClick={() => document.getElementById('doc').click()}>
-                        <div className="p-3 bg-[#222] rounded-lg text-blue-500"><FileText/></div>
-                        <div><p className="font-bold text-sm">Upload Govt ID / DigiLocker</p><p className="text-xs text-gray-500">{idFile ? idFile.name : "Tap to browse"}</p></div>
+
+                    {/* ID Upload */}
+                    <div className="bg-[#111] p-3 rounded-xl border border-[#222] flex items-center gap-4 cursor-pointer hover:border-blue-600 transition" onClick={() => document.getElementById('doc').click()}>
+                        <div className="p-2 bg-[#222] rounded-lg text-blue-500"><FileText size={18}/></div>
+                        <div><p className="font-bold text-sm">Govt ID Proof</p><p className="text-[10px] text-gray-500">{idFile ? idFile.name : "Required for everyone"}</p></div>
                         <input id="doc" type="file" className="hidden" onChange={e => setIdFile(e.target.files[0])}/>
                     </div>
+
+                    {/* NEW: Geriatric Training Section */}
+                    <div className={`p-4 rounded-xl border transition-all ${isGeriatric ? 'bg-green-900/10 border-green-500/30' : 'bg-[#111] border-[#222]'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <Stethoscope size={18} className={isGeriatric ? "text-green-500" : "text-gray-500"}/>
+                                <span className="font-bold text-sm">Geriatric Trained?</span>
+                            </div>
+                            <input type="checkbox" className="w-5 h-5 accent-green-500" checked={isGeriatric} onChange={(e) => setIsGeriatric(e.target.checked)} />
+                        </div>
+                        
+                        {isGeriatric && (
+                            <div className="mt-3 bg-black/50 p-3 rounded-lg border border-dashed border-green-500/30 flex items-center justify-between cursor-pointer hover:bg-black" onClick={() => document.getElementById('cert').click()}>
+                                <span className="text-xs text-green-400">{certFile ? certFile.name : "+ Upload Training Certificate"}</span>
+                                <Upload size={14} className="text-green-500"/>
+                                <input id="cert" type="file" className="hidden" onChange={e => setCertFile(e.target.files[0])}/>
+                            </div>
+                        )}
+                    </div>
+
                     <div className="flex gap-3 mt-4">
                         <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl font-bold bg-[#111] text-gray-400 hover:text-white">Back</button>
                         <button onClick={() => setStep(3)} className="flex-1 bg-white text-black font-bold py-4 rounded-xl hover:bg-gray-200">Verify Identity</button>
@@ -92,11 +126,16 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                 </div>
             )}
 
-            {/* STEP 3 */}
+            {/* STEP 3: Admin Approval */}
             {step === 3 && (
                 <div className="space-y-6 animate-in slide-in-from-right text-center">
                     <div className="bg-yellow-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto border border-yellow-500/20"><Shield size={40} className="text-yellow-500"/></div>
-                    <div><h3 className="text-xl font-bold">Verification Call Required</h3><p className="text-gray-500 text-sm mt-2">Join the video call to get your 6-digit code.</p></div>
+                    <div>
+                        <h3 className="text-xl font-bold">Verification Call Required</h3>
+                        <p className="text-gray-500 text-sm mt-2">
+                            Join the call. If you have training, please show your original certificate to the Admin.
+                        </p>
+                    </div>
                     
                     <a href="https://meet.google.com/fsv-htsz-srx" target="_blank" className="flex items-center justify-center gap-3 w-full bg-[#111] hover:bg-[#222] text-blue-500 font-bold py-4 rounded-xl border border-blue-900/30 transition">
                         <Video size={20}/> Join Admin Call

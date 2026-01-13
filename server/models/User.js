@@ -11,6 +11,11 @@ const UserSchema = new mongoose.Schema({
   // Verification Fields
   govtId: { type: String },
   isVerified: { type: Boolean, default: false }, 
+  
+  // NEW: Geriatric Training Fields
+  isGeriatricTrained: { type: Boolean, default: false }, // True if they check the box
+  trainingCertificate: { type: String, default: '' },    // File name/URL
+  
   verificationStatus: { 
     type: String, 
     enum: ['pending', 'interview_scheduled', 'approved', 'rejected'], 

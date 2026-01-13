@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { 
   ArrowRight, ChevronDown, Car, Shield, Heart, MapPin, 
   Users, Activity, Phone, Mail, Globe, Star, CheckCircle, 
-  Zap, Target, Clock, ChevronRight, HelpCircle, Plus, Send, MessageSquare
+  Zap, Target, Clock, ChevronRight, HelpCircle, Plus, Send, MessageSquare,
+  FileText, Video, Award, Stethoscope
 } from 'lucide-react';
 
 // ROBUST LOGO PATH
@@ -49,7 +50,7 @@ const LandingPage = ({ onGetStarted, onVolunteerJoin }) => {
         </div>
         
         <div className="hidden md:flex gap-1 text-sm font-medium bg-white/5 p-1 rounded-full border border-white/5 backdrop-blur-md">
-            {['Home', 'How It Works', 'Services', 'FAQ', 'Contact'].map((item) => (
+            {['Home', 'Services', 'Volunteer', 'FAQ', 'Contact'].map((item) => (
                 <button 
                     key={item} 
                     onClick={() => smoothScroll(item.toLowerCase().replace(/\s+/g, ''))} 
@@ -97,35 +98,7 @@ const LandingPage = ({ onGetStarted, onVolunteerJoin }) => {
         </div>
       </section>
 
-      {/* 3. HOW IT WORKS */}
-      <section id="howitworks" className="py-24 px-6 relative z-10 border-t border-white/5">
-          <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-16">
-                  <span className="text-green-500 font-bold uppercase tracking-widest text-xs">Simple Process</span>
-                  <h2 className="text-3xl md:text-5xl font-black mt-2">Help in 3 Steps</h2>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-                  <div className="hidden md:block absolute top-12 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-white/10 to-transparent -z-10"></div>
-                  {[
-                      { title: "Request", desc: "Choose a service (Ride, Meds, etc.) and set your location.", icon: MapPin },
-                      { title: "Match", desc: "Our system finds the nearest verified volunteer instantly.", icon: Users },
-                      { title: "Go", desc: "Track your volunteer in real-time and enjoy the help.", icon: Car }
-                  ].map((step, i) => (
-                      <div key={i} className="flex flex-col items-center text-center group">
-                          <div className="w-24 h-24 bg-neutral-900 border border-white/10 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 group-hover:border-green-500/50 transition duration-300 shadow-2xl relative">
-                              <step.icon size={32} className="text-white group-hover:text-green-400 transition"/>
-                              <div className="absolute -top-2 -right-2 w-8 h-8 bg-neutral-800 rounded-full flex items-center justify-center text-sm font-bold border border-black">{i+1}</div>
-                          </div>
-                          <h3 className="text-xl font-bold mb-2">{step.title}</h3>
-                          <p className="text-gray-400 text-sm max-w-xs">{step.desc}</p>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      </section>
-
-      {/* 4. SERVICES */}
+      {/* 3. SERVICES */}
       <section id="services" className="py-32 px-6 relative z-10 bg-neutral-950">
           <div className="max-w-6xl mx-auto">
               <div className="mb-16">
@@ -150,12 +123,81 @@ const LandingPage = ({ onGetStarted, onVolunteerJoin }) => {
                       <h3 className="text-xl font-bold mb-2">Medicine Delivery</h3>
                       <p className="text-gray-400 text-sm">Prescriptions picked up safely.</p>
                   </div>
-                  <div className="col-span-1 md:col-span-2 bg-neutral-900/50 border border-white/10 p-8 rounded-3xl hover:border-orange-500/30 transition flex flex-col justify-center">
-                       <div className="flex items-center gap-4 mb-4"><Shield className="text-orange-500" size={32}/><h3 className="text-xl font-bold">Safety Guarantee</h3></div>
-                       <div className="grid grid-cols-2 gap-4">
-                           <div className="flex items-center gap-2 text-sm text-gray-400"><CheckCircle size={14} className="text-green-500"/> Govt ID Verified</div>
-                           <div className="flex items-center gap-2 text-sm text-gray-400"><CheckCircle size={14} className="text-green-500"/> SOS Monitoring</div>
-                       </div>
+              </div>
+          </div>
+      </section>
+
+      {/* 4. VOLUNTEER REQUIREMENTS SECTION (NEW) */}
+      <section id="volunteer" className="py-24 px-6 bg-neutral-900 border-y border-white/5 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center relative z-10">
+              
+              {/* Left Info */}
+              <div>
+                  <span className="text-blue-500 font-bold uppercase tracking-widest text-xs mb-2 block">Join the Mission</span>
+                  <h2 className="text-4xl font-black mb-6 text-white">Become a Verified Volunteer</h2>
+                  <p className="text-gray-400 mb-8 text-lg leading-relaxed">
+                      Earn money, build community trust, and make a real difference. We require a strict verification process to ensure safety for everyone.
+                  </p>
+                  
+                  <div className="space-y-8">
+                      <div className="flex gap-5">
+                          <div className="w-14 h-14 bg-blue-900/20 rounded-2xl flex items-center justify-center text-blue-500 shrink-0 border border-blue-500/20"><FileText size={28}/></div>
+                          <div>
+                              <h4 className="text-white font-bold text-xl">1. Document Verification</h4>
+                              <p className="text-gray-400 text-sm mt-1">Upload valid Government ID (Aadhaar, License, etc.) to verify your identity.</p>
+                          </div>
+                      </div>
+                      
+                      <div className="flex gap-5">
+                          <div className="w-14 h-14 bg-purple-900/20 rounded-2xl flex items-center justify-center text-purple-500 shrink-0 border border-purple-500/20"><Video size={28}/></div>
+                          <div>
+                              <h4 className="text-white font-bold text-xl">2. Video Interview</h4>
+                              <p className="text-gray-400 text-sm mt-1">A quick live call with our Admin to verify you are a real person.</p>
+                          </div>
+                      </div>
+
+                      <div className="flex gap-5">
+                          <div className="w-14 h-14 bg-green-900/20 rounded-2xl flex items-center justify-center text-green-500 shrink-0 border border-green-500/20"><Stethoscope size={28}/></div>
+                          <div>
+                              <h4 className="text-white font-bold text-xl">3. Qualifications (Optional)</h4>
+                              <p className="text-gray-400 text-sm mt-1">Upload your <b>Geriatric Training Certificate</b> to earn the <span className="text-green-400 font-bold">PRO Badge</span> and get more requests.</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <button onClick={onVolunteerJoin} className="mt-12 bg-white text-black px-10 py-4 rounded-full font-bold text-lg hover:bg-gray-200 transition shadow-[0_0_30px_rgba(255,255,255,0.15)] flex items-center gap-2 group">
+                      Apply Now <ChevronRight className="group-hover:translate-x-1 transition"/>
+                  </button>
+              </div>
+
+              {/* Right Visual Card */}
+              <div className="relative flex justify-center">
+                  <div className="bg-black border border-white/10 rounded-[40px] p-8 shadow-2xl relative rotate-3 hover:rotate-0 transition duration-500 max-w-sm w-full">
+                      <div className="flex items-center gap-4 mb-8">
+                          <div className="w-20 h-20 bg-gradient-to-tr from-gray-700 to-gray-600 rounded-full border-4 border-black shadow-lg"></div>
+                          <div>
+                              <div className="w-32 h-6 bg-gray-800 rounded mb-2 animate-pulse"></div>
+                              <div className="w-20 h-4 bg-gray-900 rounded"></div>
+                          </div>
+                      </div>
+                      
+                      <div className="space-y-4 mb-8">
+                          <div className="w-full h-4 bg-gray-900 rounded"></div>
+                          <div className="w-5/6 h-4 bg-gray-900 rounded"></div>
+                          <div className="w-4/6 h-4 bg-gray-900 rounded"></div>
+                      </div>
+
+                      {/* Badge Overlay */}
+                      <div className="bg-[#121212] p-4 rounded-2xl border border-green-900/50 flex items-center gap-3">
+                          <div className="bg-green-600 rounded-full p-2 text-white shadow-lg shadow-green-900/50">
+                              <ShieldCheck size={24}/>
+                          </div>
+                          <div>
+                              <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Status</p>
+                              <p className="font-bold text-white text-lg">Verified Partner</p>
+                          </div>
+                      </div>
                   </div>
               </div>
           </div>
@@ -168,8 +210,8 @@ const LandingPage = ({ onGetStarted, onVolunteerJoin }) => {
               <div className="space-y-4">
                   {[
                       { q: "Is AssistAll really free?", a: "The app is free to use. Riders pay a nominal fee to volunteers to cover fuel and maintenance costs." },
-                      { q: "How are volunteers verified?", a: "Every volunteer submits Government ID (Aadhaar/License) and undergoes a background check before activation." },
-                      { q: "Can I book a ride for my parents?", a: "Yes! You can book on behalf of others and track their ride in real-time." }
+                      { q: "How are volunteers verified?", a: "Every volunteer submits Government ID (Aadhaar/License) and undergoes a background check and live video interview." },
+                      { q: "Do I need Geriatric Training?", a: "No, it is optional. However, uploading a valid certificate gives you a 'Pro' badge and priority for elderly care requests." }
                   ].map((item, i) => (
                       <div key={i} className="border border-white/10 rounded-xl overflow-hidden bg-neutral-900">
                           <button onClick={() => toggleFaq(i)} className="w-full p-5 flex justify-between items-center text-left hover:bg-white/5 transition">
@@ -183,46 +225,28 @@ const LandingPage = ({ onGetStarted, onVolunteerJoin }) => {
           </div>
       </section>
 
-      {/* 6. CONTACT SECTION (NEW) */}
+      {/* 6. CONTACT SECTION */}
       <section id="contact" className="py-24 px-6 relative z-10 bg-black border-t border-white/10">
           <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16">
-              
-              {/* Left Column: Info */}
               <div>
                   <h2 className="text-4xl font-black mb-6">Get in Touch</h2>
                   <p className="text-gray-400 mb-8 leading-relaxed">
                       Have questions about our services or interested in partnering? 
-                      We'd love to hear from you. Reach out to us directly or fill out the form.
+                      We'd love to hear from you.
                   </p>
                   
                   <div className="space-y-6">
                       <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
                           <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500"><Mail size={24}/></div>
-                          <div>
-                              <p className="text-xs text-gray-500 uppercase font-bold">Email Us</p>
-                              <p className="text-white font-bold">help@assistall.com</p>
-                          </div>
+                          <div><p className="text-xs text-gray-500 uppercase font-bold">Email Us</p><p className="text-white font-bold">help@assistall.com</p></div>
                       </div>
-                      
                       <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
                           <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500"><Phone size={24}/></div>
-                          <div>
-                              <p className="text-xs text-gray-500 uppercase font-bold">Call Us</p>
-                              <p className="text-white font-bold">+91 8089 123 456</p>
-                          </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                          <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-500"><MapPin size={24}/></div>
-                          <div>
-                              <p className="text-xs text-gray-500 uppercase font-bold">Visit Us</p>
-                              <p className="text-white font-bold">Tech Park, Kottayam, Kerala</p>
-                          </div>
+                          <div><p className="text-xs text-gray-500 uppercase font-bold">Call Us</p><p className="text-white font-bold">+91 8089 123 456</p></div>
                       </div>
                   </div>
               </div>
 
-              {/* Right Column: Form */}
               <div className="bg-neutral-900 p-8 rounded-3xl border border-white/10 shadow-2xl">
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-green-500"/> Send Message</h3>
                   <div className="space-y-4">

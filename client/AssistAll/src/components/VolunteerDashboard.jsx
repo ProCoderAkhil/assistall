@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 
 // --- CONFIG ---
-const GOAL_DAILY = 2500;
 const DEPLOYED_API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
@@ -18,21 +17,16 @@ const initialGigs = [
   { id: 1, day: 'Mon', date: '12', status: 'open', earnings: '₹800', isSpecial: true, reminder: false },
   { id: 2, day: 'Tue', date: '13', status: 'open', earnings: '₹450', isSpecial: false, reminder: false },
   { id: 3, day: 'Wed', date: '14', status: 'locked', earnings: null, isSpecial: false, reminder: false },
-  { id: 4, day: 'Thu', date: '15', status: 'locked', earnings: null, isSpecial: false, reminder: false },
-  { id: 5, day: 'Fri', date: '16', status: 'locked', earnings: null, isSpecial: true, reminder: false },
 ];
 
 const initialBazaar = [
   { id: 1, title: "Medical Insurance", desc: "Coverage ₹5L", price: "ACTIVE", color: "text-green-400 bg-green-900/20 border-green-800", icon: Shield, type: 'active' },
   { id: 2, title: "Fuel Card", desc: "Save ₹3/L", price: "Apply", color: "text-orange-400 bg-orange-900/20 border-orange-800", icon: Fuel, type: 'action' },
-  { id: 3, title: "Bike Service", desc: "20% Off", price: "Claim", color: "text-blue-400 bg-blue-900/20 border-blue-800", icon: Wrench, type: 'action' },
 ];
 
 const transactions = [
     { id: 1, to: "HDFC Bank", date: "Today, 10:23 AM", amount: "-₹1,200", status: "success" },
     { id: 2, to: "Ride #8492", date: "Yesterday", amount: "+₹150", status: "income" },
-    { id: 3, to: "Tip", date: "Yesterday", amount: "+₹50", status: "income" },
-    { id: 4, to: "Fuel Card", date: "12 Oct", amount: "-₹500", status: "success" },
 ];
 
 const VolunteerDashboard = ({ user, globalToast }) => {
@@ -42,11 +36,12 @@ const VolunteerDashboard = ({ user, globalToast }) => {
   const [requests, setRequests] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
   const [financials, setFinancials] = useState({ total: 1250, base: 1000, tips: 250, jobs: 4 }); 
+  const [leaderboard, setLeaderboard] = useState([]);
   const [isOnline, setIsOnline] = useState(false);
   const [showOfflineModal, setShowOfflineModal] = useState(false);
   const [toast, setToast] = useState(null);
   
-  // ⚠️ SAFETY LOCK: Prevents background updates from overwriting your screen while you act
+  // ⚠️ SAFETY LOCK
   const isProcessing = useRef(false);
   const pollingRef = useRef(null);
 
@@ -85,6 +80,14 @@ const VolunteerDashboard = ({ user, globalToast }) => {
       } 
     } catch (err) {} 
   };
+
+  // --- FETCH LEADERBOARD ---
+  const fetchLeaderboard = async () => {
+      try {
+          const res = await fetch(`${DEPLOYED_API_URL}/api/requests/leaderboard`);
+          if(res.ok) setLeaderboard(await res.json());
+      } catch(e) {}
+  };
   
   useEffect(() => { 
       if(isOnline) {
@@ -96,6 +99,10 @@ const VolunteerDashboard = ({ user, globalToast }) => {
       return () => clearInterval(pollingRef.current); 
   }, [isOnline]);
 
+  useEffect(() => {
+      if(activeTab === 'leaderboard') fetchLeaderboard();
+  }, [activeTab]);
+
   // --- ACTION HANDLER ---
   const handleAction = async (id, action) => {
     isProcessing.current = true;
@@ -104,7 +111,7 @@ const VolunteerDashboard = ({ user, globalToast }) => {
         let endpoint = `/api/requests/${id}/${action}`;
         let body = { volunteerId: user._id, volunteerName: user.name };
 
-        // 1. Optimistic Update (Immediate UI Feedback)
+        // 1. Optimistic Update
         if (action === 'accept') {
             const req = requests.find(r => r._id === id);
             if(req) {
@@ -231,6 +238,33 @@ const VolunteerDashboard = ({ user, globalToast }) => {
     );
   };
 
+  const LeaderboardView = () => (
+      <div className="p-6 pt-24 h-full bg-[#050505] animate-in fade-in overflow-y-auto pb-32">
+          <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-500/30"><Trophy size={40} className="text-yellow-500"/></div>
+              <h2 className="text-3xl font-black text-white">Top Helpers</h2>
+              <p className="text-neutral-500 text-sm">This Week's Heroes</p>
+          </div>
+          
+          <div className="space-y-4">
+              {leaderboard.length === 0 && <p className="text-center text-neutral-600">No data yet.</p>}
+              {leaderboard.map((vol, index) => (
+                  <div key={index} className={`flex items-center p-4 rounded-2xl border ${index===0 ? 'bg-yellow-900/10 border-yellow-500/30' : 'bg-[#121212] border-white/5'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black mr-4 ${index===0 ? 'bg-yellow-500 text-black' : 'bg-neutral-800 text-neutral-400'}`}>{index+1}</div>
+                      <div className="flex-1">
+                          <h4 className="font-bold text-white">{vol._id || "Volunteer"}</h4>
+                          <p className="text-xs text-neutral-500">{vol.rides} Rides Completed</p>
+                      </div>
+                      <div className="text-right">
+                          <p className="text-green-400 font-bold">₹{vol.earnings}</p>
+                          <div className="flex items-center justify-end text-[10px] text-yellow-500 font-bold gap-1"><Star size={10} fill="currentColor"/> {vol.rating?.toFixed(1)}</div>
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </div>
+  );
+
   const PocketView = () => (
     <div className="p-6 pt-24 pb-32 h-full bg-[#050505] animate-in fade-in overflow-y-auto">
         <div className="bg-gradient-to-br from-[#121212] to-[#0a0a0a] rounded-[32px] p-8 border border-white/5 text-center shadow-2xl relative overflow-hidden mb-8 shadow-2xl group">
@@ -246,14 +280,6 @@ const VolunteerDashboard = ({ user, globalToast }) => {
                  <div className="bg-[#1a1a1a] p-3 rounded-2xl border border-white/5">
                      <CreditCard size={24} className="text-white"/>
                  </div>
-             </div>
-
-             <div className="flex items-end gap-2 h-16 mb-6 opacity-50">
-                 {[40, 65, 30, 80, 50, 90, 45].map((h, i) => (
-                     <div key={i} className="flex-1 bg-green-500/20 rounded-t-sm relative group cursor-pointer" style={{height: `${h}%`}}>
-                         <div className="absolute inset-0 bg-green-500 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-                     </div>
-                 ))}
              </div>
 
              <button onClick={handleWithdraw} disabled={financials.total === 0 || isWithdrawing} className="w-full bg-white text-black font-black py-4 rounded-2xl hover:bg-gray-200 transition active:scale-[0.98] disabled:opacity-50 relative z-10 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
@@ -315,10 +341,16 @@ const VolunteerDashboard = ({ user, globalToast }) => {
         <div className="flex gap-3 items-center"><button onClick={() => setActiveTab('profile')} className="w-10 h-10 bg-[#1a1a1a] rounded-full flex items-center justify-center text-sm font-bold border-2 border-[#222] hover:border-green-500 transition cursor-pointer active:scale-[0.95] text-white shadow-lg">{user.name.charAt(0)}</button></div>
       </div>
       
-      <div className="flex-grow relative overflow-hidden">{activeTab === 'feed' && <FeedView />}{activeTab === 'pocket' && <PocketView />}{activeTab === 'gigs' && <GigsView />}{activeTab === 'bazaar' && <BazaarView />}{activeTab === 'profile' && <ProfileView />}</div>
+      <div className="flex-grow relative overflow-hidden">{activeTab === 'feed' && <FeedView />}{activeTab === 'pocket' && <PocketView />}{activeTab === 'leaderboard' && <LeaderboardView />}{activeTab === 'gigs' && <GigsView />}{activeTab === 'bazaar' && <BazaarView />}{activeTab === 'profile' && <ProfileView />}</div>
       
       <div className="bg-[#050505]/95 border-t border-white/5 py-2 px-6 flex justify-between items-center z-50 absolute bottom-0 left-0 right-0 pb-6 backdrop-blur-xl">
-        {[{id:'feed',icon:Home,l:'Feed'},{id:'pocket',icon:Wallet,l:'Pocket'},{id:'gigs',icon:Briefcase,l:'Gigs'},{id:'bazaar',icon:ShoppingBag,l:'Bazaar'}].map(item => (
+        {[
+            {id:'feed',icon:Home,l:'Feed'},
+            {id:'pocket',icon:Wallet,l:'Pocket'},
+            {id:'leaderboard',icon:Trophy,l:'Rank'},
+            {id:'gigs',icon:Briefcase,l:'Gigs'},
+            {id:'bazaar',icon:ShoppingBag,l:'Bazaar'}
+        ].map(item => (
           <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl transition-all duration-300 ${activeTab === item.id ? 'text-white' : 'text-neutral-600 hover:text-neutral-400'}`}><item.icon size={26} strokeWidth={activeTab === item.id ? 2.5 : 2} className={`transition-transform ${activeTab === item.id ? 'scale-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]' : ''}`}/><span className="text-[9px] font-black tracking-widest uppercase">{item.l}</span></button>
         ))}
       </div>

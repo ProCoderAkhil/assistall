@@ -7,7 +7,7 @@ const AccessCode = require('../models/AccessCode');
 
 // REGISTER
 router.post('/register', async (req, res) => {
-  const { name, email, password, role, govtId, address, phone, adminCode } = req.body;
+  const { name, email, password, role, govtId, address, phone, adminCode, isGeriatricTrained, trainingCertificate } = req.body;
 
   try {
     let user = await User.findOne({ email });
@@ -29,7 +29,9 @@ router.post('/register', async (req, res) => {
       name, email, password: hashedPassword, role,
       govtId, address, phone,
       isVerified: role === 'user' ? true : isVerified, 
-      verificationStatus: role === 'volunteer' ? 'pending' : 'approved'
+      verificationStatus: role === 'volunteer' ? 'pending' : 'approved',
+      isGeriatricTrained: isGeriatricTrained || false,
+      trainingCertificate: trainingCertificate || ''
     });
 
     await user.save();
@@ -57,6 +59,15 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
         res.json({ token, user: { _id: user._id, name: user.name, role: user.role, isVerified: user.isVerified } });
     } catch (err) { res.status(500).json({ message: 'Server Error' }); }
+});
+
+// --- NEW: GET PUBLIC USER PROFILE (For User Dashboard) ---
+router.get('/user/:id', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id).select('-password -adminCode');
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.json(user);
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
 module.exports = router;
