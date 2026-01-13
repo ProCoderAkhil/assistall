@@ -5,7 +5,7 @@ const AppLoader = () => {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   
-  // ✅ FIX: Use standard 'Cpu' icon instead of custom 'Power' to prevent crashes
+  // ✅ FIX: Use 'Cpu' (imported) instead of 'Power' (which was undefined)
   const loadingSteps = [
     { text: "INITIALIZING CORE SYSTEMS...", icon: Cpu },
     { text: "ESTABLISHING SECURE UPLINK...", icon: Lock },
@@ -23,6 +23,7 @@ const AppLoader = () => {
           clearInterval(timer);
           return 100;
         }
+        // Random speed bursts for realism
         const burst = Math.random() < 0.1 ? 15 : 1; 
         return Math.min(old + burst, 100);
       });

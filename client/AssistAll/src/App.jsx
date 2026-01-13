@@ -30,7 +30,6 @@ const DEPLOYED_API_URL = window.location.hostname === 'localhost'
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError(error) { return { hasError: true }; }
-  componentDidCatch(error, errorInfo) { console.error("Uncaught error:", error, errorInfo); }
   render() {
     if (this.state.hasError) {
       return (
@@ -128,7 +127,7 @@ function App() {
       else navigate('/home');
   };
 
-  // ⚠️ CRITICAL FIX: HARD RELOAD
+  // ⚠️ FORCE HARD RELOAD
   const handleLogout = () => { 
       localStorage.clear(); 
       window.location.href = "/"; 
@@ -158,6 +157,7 @@ function App() {
         <AppLoader />
       ) : (
         <div className="h-screen w-full bg-[#050505] font-sans text-white relative overflow-hidden">
+          
           <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4 pointer-events-none">
               {toast && <div className="pointer-events-auto"><Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} /></div>}
           </div>
@@ -168,7 +168,7 @@ function App() {
             <Route path="/register" element={<UserSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
             <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
 
-            {/* USER ROUTES */}
+            {/* PROTECTED ROUTES */}
             <Route path="/home" element={user && user.role === 'user' ? (
                 <>
                     <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
