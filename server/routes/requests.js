@@ -2,82 +2,78 @@ const express = require('express');
 const router = express.Router();
 const Request = require('../models/Request');
 
-// 1. GET ALL REQUESTS
+// GET REQUESTS
 router.get('/', async (req, res) => {
     try {
-        const requests = await Request.find().sort({ isScheduled: -1, scheduledTime: 1, createdAt: -1 });
+        const twentyFourHoursAgo = new Date(new Date().getTime() - (24 * 60 * 60 * 1000));
+        const requests = await Request.find({
+            $or: [
+                { status: 'pending', createdAt: { $gte: twentyFourHoursAgo } },
+                { status: { $in: ['accepted', 'in_progress'] } }
+            ]
+        }).sort({ createdAt: -1 });
         res.status(200).json(requests);
     } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
-// 2. CREATE REQUEST (Supports Scheduling)
+// CREATE REQUEST (Generate OTP)
 router.post('/', async (req, res) => {
     try {
+        // ✅ NEW: Generate 4-digit OTP
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        
         const newRequest = new Request({
             ...req.body,
-            status: 'pending'
+            pickupOTP: otp
         });
         const savedRequest = await newRequest.save();
         res.status(201).json(savedRequest);
-    } catch (err) { res.status(500).json({ message: "Failed to create request" }); }
+    } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// 3. REPORT ISSUE (Safety)
-router.post('/:id/report', async (req, res) => {
-    try {
-        await Request.findByIdAndUpdate(req.params.id, {
-            $push: { reports: { by: req.body.by, reason: req.body.reason } }
-        });
-        res.json({ message: "Report logged. Admin notified." });
-    } catch (err) { res.status(500).json(err); }
-});
-
-// 4. LEADERBOARD (Gamification)
-router.get('/leaderboard', async (req, res) => {
-    try {
-        const leaderboard = await Request.aggregate([
-            { $match: { status: 'completed' } },
-            { $group: { 
-                _id: "$volunteerName", 
-                rides: { $sum: 1 }, 
-                earnings: { $sum: "$price" },
-                rating: { $avg: "$rating" }
-            }},
-            { $sort: { rides: -1 } },
-            { $limit: 10 }
-        ]);
-        res.json(leaderboard);
-    } catch (err) { res.status(500).json(err); }
-});
-
-// ... (Keep existing Accept, Pickup, Complete, Review routes) ...
-// 5. RIDE ACTIONS
+// UPDATE STATUS (With OTP Check)
 router.put('/:id/:action', async (req, res) => {
     try {
         const { action } = req.params;
-        const ride = await Request.findById(req.params.id);
-        if (!ride) return res.status(404).json({ message: "Not Found" });
+        const { volunteerId, volunteerName, otp } = req.body; // Receive OTP
+        const request = await Request.findById(req.params.id);
+
+        if (!request) return res.status(404).json({ message: "Request not found" });
 
         if (action === 'accept') {
-            if (ride.status !== 'pending') return res.status(400).json({ message: "Taken" });
-            ride.status = 'accepted';
-            ride.volunteerName = req.body.volunteerName;
-            ride.volunteerId = req.body.volunteerId;
-        } else if (action === 'pickup') {
-            ride.status = 'in_progress';
-        } else if (action === 'complete') {
-            ride.status = 'completed';
+            request.status = 'accepted';
+            request.volunteerId = volunteerId;
+            request.volunteerName = volunteerName;
+        } 
+        else if (action === 'pickup') {
+            // ✅ NEW: Verify OTP
+            if (request.pickupOTP !== otp) {
+                return res.status(400).json({ message: "Incorrect OTP" });
+            }
+            request.status = 'in_progress';
+        } 
+        else if (action === 'complete') {
+            request.status = 'completed';
         }
-        await ride.save();
-        res.json(ride);
-    } catch (err) { res.status(500).json({ message: "Action Failed" }); }
+
+        await request.save();
+        res.json(request);
+    } catch (err) { 
+        res.status(500).json({ message: err.message }); 
+    }
 });
 
-router.put('/:id/review', async (req, res) => {
+// GET LEADERBOARD
+router.get('/leaderboard', async (req, res) => {
     try {
-        const updated = await Request.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json(updated);
-    } catch (err) { res.status(500).json(err); }
+        const stats = await Request.aggregate([
+            { $match: { status: 'completed' } },
+            { $group: { _id: "$volunteerName", rides: { $sum: 1 }, earnings: { $sum: "$price" } } },
+            { $sort: { rides: -1 } },
+            { $limit: 5 }
+        ]);
+        res.json(stats);
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
 module.exports = router;

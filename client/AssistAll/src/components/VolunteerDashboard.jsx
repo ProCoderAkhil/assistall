@@ -5,7 +5,7 @@ import {
   CheckCircle, FileText, Receipt, Power, Bell, HelpCircle, Wallet,
   Home, Briefcase, ShoppingBag, Gift, Lock, Loader2, Tag, Percent, 
   AlertCircle, Zap, LayoutGrid, Timer, Map as MapIcon, TrendingUp,
-  CreditCard, Fuel, Wrench, Trophy, Calendar, RefreshCw, Send, DollarSign
+  CreditCard, Fuel, Wrench, Trophy, Calendar, RefreshCw, Send, DollarSign, Key
 } from 'lucide-react';
 
 // --- CONFIG ---
@@ -35,15 +35,24 @@ const VolunteerDashboard = ({ user, globalToast }) => {
   const [activeTab, setActiveTab] = useState('feed'); 
   const [requests, setRequests] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
-  const [financials, setFinancials] = useState({ total: 1250, base: 1000, tips: 250, jobs: 4 }); 
+  const [financials, setFinancials] = useState({ total: 1250, base: 1000, tips: 250, jobs: 4, potential: 0 }); 
   const [leaderboard, setLeaderboard] = useState([]);
-  const [isOnline, setIsOnline] = useState(false);
+  
+  // --- PERSISTENCE: Load Online State ---
+  const [isOnline, setIsOnline] = useState(() => localStorage.getItem('isOnline') === 'true');
+  const [dismissedIds, setDismissedIds] = useState([]); // Stores IDs of dismissed rides
+  
   const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [showOTPModal, setShowOTPModal] = useState(false); // ✅ NEW: OTP Modal
+  const [otpInput, setOtpInput] = useState("");
   const [toast, setToast] = useState(null);
   
-  // ⚠️ SAFETY LOCK
+  // --- NEW: Ride Timer ---
+  const [rideTime, setRideTime] = useState(0);
+  
   const isProcessing = useRef(false);
   const pollingRef = useRef(null);
+  const timerRef = useRef(null);
 
   const [bazaarList, setBazaarList] = useState(initialBazaar);
   const [gigsList, setGigsList] = useState(initialGigs);
@@ -51,6 +60,28 @@ const VolunteerDashboard = ({ user, globalToast }) => {
 
   const showToast = (msg, type) => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
   
+  // Save Online State
+  useEffect(() => { localStorage.setItem('isOnline', isOnline); }, [isOnline]);
+
+  // --- RIDE TIMER LOGIC ---
+  useEffect(() => {
+      if (activeJob && activeJob.status === 'in_progress') {
+          timerRef.current = setInterval(() => {
+              setRideTime(prev => prev + 1);
+          }, 1000);
+      } else {
+          clearInterval(timerRef.current);
+          setRideTime(0);
+      }
+      return () => clearInterval(timerRef.current);
+  }, [activeJob]);
+
+  const formatTime = (seconds) => {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   // --- API POLLING ---
   const fetchRequests = async () => { 
     if (!isOnline || isProcessing.current) return; 
@@ -60,21 +91,35 @@ const VolunteerDashboard = ({ user, globalToast }) => {
       if (res.ok) { 
           const data = await res.json(); 
           if(Array.isArray(data)) { 
-            // 1. Check if I have an active job
             const myActive = data.find(r => 
                 r.volunteerId === user._id && 
                 (r.status === 'accepted' || r.status === 'in_progress')
             );
             
-            // 2. State Sync
             setActiveJob(myActive || null);
 
-            // 3. Populate Feed if free
             if (!myActive) {
-                const pending = data.filter(r => r.status === 'pending');
-                setRequests(pending);
+                // Filter out stale and dismissed requests
+                const now = new Date();
+                const validRequests = data.filter(r => {
+                    if (dismissedIds.includes(r._id)) return false; // Filter dismissed
+                    if (r.status !== 'pending') return false;
+                    const reqTime = new Date(r.createdAt);
+                    const diffMins = Math.round(((now - reqTime) % 86400000) / 60000);
+                    return diffMins < 30; // Filter stale (>30m)
+                });
+                
+                // Prevent infinite loop by checking if data actually changed
+                setRequests(prev => {
+                    if (JSON.stringify(prev) !== JSON.stringify(validRequests)) return validRequests;
+                    return prev;
+                });
+                
+                // Calculate potential earnings
+                const potential = validRequests.reduce((acc, curr) => acc + (curr.price || 150), 0);
+                setFinancials(prev => ({ ...prev, potential }));
             } else {
-                setRequests([]); // Clear pending list if busy
+                setRequests([]); 
             }
           } 
       } 
@@ -97,21 +142,37 @@ const VolunteerDashboard = ({ user, globalToast }) => {
           clearInterval(pollingRef.current);
       }
       return () => clearInterval(pollingRef.current); 
-  }, [isOnline]);
+  }, [isOnline, dismissedIds]);
 
   useEffect(() => {
       if(activeTab === 'leaderboard') fetchLeaderboard();
   }, [activeTab]);
 
   // --- ACTION HANDLER ---
-  const handleAction = async (id, action) => {
+  const handleAction = async (id, action, otpValue = null) => {
+    // Intercept 'pickup' to show OTP modal first
+    if (action === 'pickup' && !otpValue) {
+        setShowOTPModal(true); 
+        return;
+    }
+
     isProcessing.current = true;
 
     try {
         let endpoint = `/api/requests/${id}/${action}`;
-        let body = { volunteerId: user._id, volunteerName: user.name };
+        let body = { volunteerId: user._id, volunteerName: user.name, otp: otpValue };
 
-        // 1. Optimistic Update
+        const res = await fetch(`${DEPLOYED_API_URL}${endpoint}`, { 
+            method: 'PUT', 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.message || "Action Failed");
+        }
+
         if (action === 'accept') {
             const req = requests.find(r => r._id === id);
             if(req) {
@@ -122,7 +183,9 @@ const VolunteerDashboard = ({ user, globalToast }) => {
         } 
         else if (action === 'pickup') {
             setActiveJob(prev => ({ ...prev, status: 'in_progress' })); 
-            showToast("Trip Started!", "success");
+            setShowOTPModal(false);
+            setOtpInput("");
+            showToast("OTP Verified! Trip Started.", "success");
         } 
         else if (action === 'complete') {
             setActiveJob(null);
@@ -130,21 +193,13 @@ const VolunteerDashboard = ({ user, globalToast }) => {
             showToast("Ride Completed!", "success");
         }
 
-        // 2. Server Sync
-        await fetch(`${DEPLOYED_API_URL}${endpoint}`, { 
-            method: 'PUT', 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify(body)
-        });
-
     } catch(e) { 
-        showToast("Network Error", "error"); 
-        setActiveJob(null); // Revert on error
+        showToast(e.message || "Network Error", "error"); 
     } finally {
         setTimeout(() => {
             isProcessing.current = false;
             fetchRequests(); 
-        }, 2000);
+        }, 1000);
     }
   };
 
@@ -216,9 +271,21 @@ const VolunteerDashboard = ({ user, globalToast }) => {
             {activeJob && (
                 <div className="absolute bottom-24 left-4 right-4 bg-white rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.8)] p-6 z-20 border-t-4 border-blue-600 animate-in slide-in-from-bottom duration-500">
                     <div className="flex justify-between items-center mb-6">
-                        <div><div className="flex items-center gap-2 mb-1"><span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">{activeJob.type}</span></div><h2 className="text-2xl font-black text-gray-900">{activeJob.requesterName}</h2></div>
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">{activeJob.type}</span>
+                                {activeJob.status === 'in_progress' && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1"><Timer size={10}/> {formatTime(rideTime)}</span>}
+                            </div>
+                            <h2 className="text-2xl font-black text-gray-900">{activeJob.requesterName}</h2>
+                        </div>
                         <div className="bg-blue-50 p-3 rounded-full"><Navigation size={24} className="text-blue-600"/></div>
                     </div>
+                    {/* Destination Display */}
+                    <div className="flex gap-2 mb-4 bg-gray-50 p-3 rounded-xl items-center">
+                        <MapPin size={16} className="text-gray-400" />
+                        <p className="text-sm text-gray-600 font-bold">{activeJob.drop || "General Trip"}</p>
+                    </div>
+
                     {activeJob.status === 'accepted' ? (
                         <button onClick={() => handleAction(activeJob._id, 'pickup')} className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl text-lg shadow-lg hover:bg-blue-700 active:scale-[0.98] transition-all flex justify-center items-center gap-2">Slide to Pickup <ArrowRight size={20}/></button>
                     ) : (
@@ -234,6 +301,7 @@ const VolunteerDashboard = ({ user, globalToast }) => {
                         <div>
                             <p className="text-neutral-500 text-[10px] uppercase font-bold mb-1 tracking-wider">PASSENGER</p>
                             <h3 className="text-2xl font-bold">{req.requesterName}</h3>
+                            <div className="flex items-center gap-1 mt-1 text-gray-400 text-xs"><MapPin size={12}/> <span className="truncate max-w-[150px]">{req.drop || "General Trip"}</span></div>
                         </div>
                         <div className="text-right">
                             <p className="text-3xl font-black text-white">₹{req.price || 150}</p>
@@ -241,11 +309,12 @@ const VolunteerDashboard = ({ user, globalToast }) => {
                         </div>
                     </div>
                     
-                    {/* --- ACTION BUTTONS (Added Dismiss) --- */}
+                    {/* --- ACTION BUTTONS --- */}
                     <div className="flex gap-3">
                         <button 
                             onClick={(e) => {
                                 e.stopPropagation();
+                                setDismissedIds(prev => [...prev, req._id]); // Add to blocklist
                                 setRequests(prev => prev.filter(r => r._id !== req._id));
                             }} 
                             className="w-16 bg-[#222] text-white rounded-2xl flex items-center justify-center hover:bg-red-900/30 hover:text-red-500 transition border border-white/5 active:scale-95"
@@ -272,7 +341,6 @@ const VolunteerDashboard = ({ user, globalToast }) => {
               <h2 className="text-3xl font-black text-white">Top Helpers</h2>
               <p className="text-neutral-500 text-sm">This Week's Heroes</p>
           </div>
-          
           <div className="space-y-4">
               {leaderboard.length === 0 && <p className="text-center text-neutral-600">No data yet.</p>}
               {leaderboard.map((vol, index) => (
@@ -296,7 +364,6 @@ const VolunteerDashboard = ({ user, globalToast }) => {
     <div className="p-6 pt-24 pb-32 h-full bg-[#050505] animate-in fade-in overflow-y-auto">
         <div className="bg-gradient-to-br from-[#121212] to-[#0a0a0a] rounded-[32px] p-8 border border-white/5 text-center shadow-2xl relative overflow-hidden mb-8 shadow-2xl group">
              <div className="absolute -top-10 -right-10 w-40 h-40 bg-green-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-green-500/20 transition duration-700"></div>
-             
              <div className="flex justify-between items-start mb-6">
                  <div>
                      <p className="text-neutral-500 text-xs font-black uppercase tracking-widest mb-1">Available Balance</p>
@@ -308,10 +375,15 @@ const VolunteerDashboard = ({ user, globalToast }) => {
                      <CreditCard size={24} className="text-white"/>
                  </div>
              </div>
-
              <button onClick={handleWithdraw} disabled={financials.total === 0 || isWithdrawing} className="w-full bg-white text-black font-black py-4 rounded-2xl hover:bg-gray-200 transition active:scale-[0.98] disabled:opacity-50 relative z-10 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                  {isWithdrawing ? <Loader2 className="animate-spin"/> : <><ArrowRight size={20} className="-rotate-45"/> Withdraw to Bank</>}
              </button>
+        </div>
+        
+        {/* Pending Earnings Card */}
+        <div className="bg-[#121212] p-6 rounded-[32px] border border-white/5 mb-8">
+            <h3 className="text-lg font-bold text-white mb-2">Pending Earnings</h3>
+            <p className="text-neutral-500 text-sm">You have <span className="text-white font-bold">₹{financials.potential}</span> in potential gigs nearby.</p>
         </div>
 
         <div className="mb-8">
@@ -339,7 +411,7 @@ const VolunteerDashboard = ({ user, globalToast }) => {
   const GigsView = () => (
     <div className="p-6 pt-24 pb-32 h-full bg-[#050505] animate-in fade-in overflow-y-auto">
         <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-[32px] p-6 relative overflow-hidden border border-purple-500/20 mb-8">
-            <div className="relative z-10"><div className="flex items-center gap-2 mb-3"><span className="bg-white/10 text-white text-[10px] font-black px-2 py-1 rounded backdrop-blur uppercase tracking-wider border border-white/10">3 DAY STREAK</span></div><h2 className="text-2xl font-black text-white mb-2">Complete 3 Rides</h2><p className="text-purple-200 text-sm mb-6 font-medium">Finish 3 more trips by 10 PM to unlock <span className="text-white font-bold">₹200 Bonus</span>.</p><div className="w-full bg-black/30 h-2 rounded-full overflow-hidden"><div className="bg-purple-400 w-1/3 h-full rounded-full shadow-[0_0_15px_rgba(192,132,252,0.5)]"></div></div></div><Zap size={100} className="absolute -right-6 -bottom-6 text-purple-500/10 rotate-12"/>
+            <div className="relative z-10"><div className="flex items-center gap-2 mb-3"><span className="bg-white/10 text-white text-[10px] font-black px-2 py-1 rounded backdrop-blur uppercase tracking-wider border border-white/10">3 DAY STREAK</span></div><h2 className="text-2xl font-black text-white mb-2">Complete 3 Rides</h2><p className="text-purple-200 text-sm mb-6 font-medium">Finish 3 more trips by 10 PM to unlock <span className="text-white font-bold">₹200 Bonus</span>.</p></div><Zap size={100} className="absolute -right-6 -bottom-6 text-purple-500/10 rotate-12"/>
         </div>
         <div className="space-y-3">{gigsList.map((item) => (<div key={item.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer active:scale-[0.98] ${item.status === 'locked' ? 'bg-[#121212] border-white/5 opacity-50' : 'bg-[#1a1a1a] border-white/10 hover:border-white/20'}`}><div className="flex items-center gap-4"><div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm ${item.isSpecial ? 'bg-green-600 text-black shadow-lg shadow-green-900/20' : 'bg-[#222] text-neutral-400'}`}>{item.date}</div><div><p className="text-white font-bold text-lg">{item.day}</p><p className="text-neutral-500 text-xs font-bold uppercase tracking-wide">{item.status}</p></div></div>{item.earnings ? <div className="text-right"><p className="text-green-400 font-black">{item.earnings}</p><p className="text-[10px] text-neutral-500 uppercase font-bold">Est.</p></div> : <Bell size={20} className={item.reminder ? "text-blue-500 fill-current" : "text-neutral-700"}/>}</div>))}</div>
     </div>
@@ -361,27 +433,65 @@ const VolunteerDashboard = ({ user, globalToast }) => {
 
   return (
     <div className="h-screen w-full bg-[#050505] text-white font-sans flex flex-col overflow-hidden relative">
+      {/* Toast Notification */}
       {toast && <div className={`absolute top-4 left-4 right-4 z-[6000] p-4 rounded-2xl shadow-2xl flex items-center animate-in slide-in-from-top ${toast.type === 'error' ? 'bg-red-900/90 border-red-500' : 'bg-[#222]/90 border-[#333] border'} border backdrop-blur-md`}>{toast.type === 'success' ? <CheckCircle className="text-green-500 mr-3"/> : <Receipt className="text-white mr-3"/>}<p className="font-bold text-sm">{toast.msg}</p></div>}
       
+      {/* Offline Modal */}
+      {showOfflineModal && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-end justify-center animate-in fade-in duration-300 backdrop-blur-sm">
+          <div className="bg-[#121212] w-full max-w-md rounded-t-[32px] p-8 border-t border-[#333] animate-in slide-in-from-bottom">
+            <h3 className="text-2xl font-black text-white mb-2 tracking-tight">End Shift?</h3>
+            <p className="text-neutral-500 mb-8 font-medium">You will stop receiving requests.</p>
+            <div className="flex gap-4">
+              <button onClick={() => { setIsOnline(false); setShowOfflineModal(false); }} className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-bold">Go Offline</button>
+              <button onClick={() => setShowOfflineModal(false)} className="flex-1 bg-[#222] text-white py-4 rounded-2xl font-bold">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: OTP Modal */}
+      {showOTPModal && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-in fade-in duration-300 backdrop-blur-sm p-6">
+          <div className="bg-[#121212] w-full max-w-sm rounded-[32px] p-8 border border-white/10 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6"><Key className="text-blue-500" size={32}/></div>
+            <h3 className="text-2xl font-black text-white mb-2">Enter OTP</h3>
+            <p className="text-gray-500 mb-6 text-sm">Ask passenger for the 4-digit code.</p>
+            <input 
+                type="tel" maxLength="4" autoFocus
+                className="bg-[#050505] border border-white/20 text-white text-center text-4xl font-mono tracking-[0.5em] rounded-2xl w-full py-4 mb-6 focus:border-blue-500 focus:outline-none"
+                value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value)}
+            />
+            <div className="flex gap-3">
+                <button onClick={() => setShowOTPModal(false)} className="flex-1 bg-[#222] text-white py-4 rounded-2xl font-bold">Cancel</button>
+                <button 
+                    onClick={() => handleAction(activeJob._id, 'pickup', otpInput)} 
+                    className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold disabled:opacity-50"
+                    disabled={otpInput.length !== 4}
+                >
+                    Start Ride
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="absolute top-0 left-0 right-0 bg-[#050505]/80 backdrop-blur-md z-50 px-4 py-4 flex justify-between items-center border-b border-white/5">
         <div onClick={() => setShowOfflineModal(true)} className="flex items-center gap-2.5 px-4 py-2 rounded-full border border-green-500/30 text-green-500 cursor-pointer hover:bg-green-500/10 active:scale-95 transition bg-green-500/5"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div><span className="text-[10px] font-black uppercase tracking-widest">ONLINE</span></div>
         <div className="flex gap-3 items-center"><button onClick={() => setActiveTab('profile')} className="w-10 h-10 bg-[#1a1a1a] rounded-full flex items-center justify-center text-sm font-bold border-2 border-[#222] hover:border-green-500 transition cursor-pointer active:scale-[0.95] text-white shadow-lg">{user.name.charAt(0)}</button></div>
       </div>
       
+      {/* Content Area */}
       <div className="flex-grow relative overflow-hidden">{activeTab === 'feed' && <FeedView />}{activeTab === 'pocket' && <PocketView />}{activeTab === 'leaderboard' && <LeaderboardView />}{activeTab === 'gigs' && <GigsView />}{activeTab === 'bazaar' && <BazaarView />}{activeTab === 'profile' && <ProfileView />}</div>
       
+      {/* Bottom Nav */}
       <div className="bg-[#050505]/95 border-t border-white/5 py-2 px-6 flex justify-between items-center z-50 absolute bottom-0 left-0 right-0 pb-6 backdrop-blur-xl">
-        {[
-            {id:'feed',icon:Home,l:'Feed'},
-            {id:'pocket',icon:Wallet,l:'Pocket'},
-            {id:'leaderboard',icon:Trophy,l:'Rank'},
-            {id:'gigs',icon:Briefcase,l:'Gigs'},
-            {id:'bazaar',icon:ShoppingBag,l:'Bazaar'}
-        ].map(item => (
+        {[{id:'feed',icon:Home,l:'Feed'},{id:'pocket',icon:Wallet,l:'Pocket'},{id:'leaderboard',icon:Trophy,l:'Rank'},{id:'gigs',icon:Briefcase,l:'Gigs'},{id:'bazaar',icon:ShoppingBag,l:'Bazaar'}].map(item => (
           <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl transition-all duration-300 ${activeTab === item.id ? 'text-white' : 'text-neutral-600 hover:text-neutral-400'}`}><item.icon size={26} strokeWidth={activeTab === item.id ? 2.5 : 2} className={`transition-transform ${activeTab === item.id ? 'scale-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]' : ''}`}/><span className="text-[9px] font-black tracking-widest uppercase">{item.l}</span></button>
         ))}
       </div>
-      {showOfflineModal && <OfflineModal />}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, Phone, MessageSquare } from 'lucide-react';
+import { CheckCircle, Phone, MessageSquare, Key } from 'lucide-react';
 
 const VolunteerFound = ({ requestData, onReset }) => {
     return (
@@ -11,8 +11,19 @@ const VolunteerFound = ({ requestData, onReset }) => {
             </div>
 
             <h2 className="text-3xl font-black text-white mb-2 tracking-tight">Volunteer Found!</h2>
-            <p className="text-gray-400 mb-8 font-medium">{requestData?.volunteerName} is heading your way.</p>
+            <p className="text-gray-400 mb-6 font-medium">{requestData?.volunteerName} is heading your way.</p>
             
+            {/* ✅ NEW: OTP CARD */}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-2xl mb-6 flex flex-col items-center">
+                <p className="text-yellow-500 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <Key size={12}/> Start Code
+                </p>
+                <p className="text-4xl font-mono font-black text-white tracking-[0.2em]">
+                    {requestData?.pickupOTP || "----"}
+                </p>
+                <p className="text-gray-500 text-[10px] mt-2">Give this code to volunteer upon arrival</p>
+            </div>
+
             {/* Details Card */}
             <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/5 flex items-center justify-between mb-8">
                 <div className="flex items-center">
