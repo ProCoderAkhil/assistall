@@ -17,6 +17,8 @@ const StatusBanner = ({ status }) => {
     let bg = "bg-blue-600", text = "Updating...", icon = <Bell size={16} />;
     if (status === 'accepted') { bg = "bg-green-600"; text = "VOLUNTEER FOUND"; icon = <CheckCircle size={16} />; }
     else if (status === 'in_progress') { bg = "bg-blue-600"; text = "RIDE IN PROGRESS"; icon = <Navigation size={16} />; }
+    else if (status === 'completed') { bg = "bg-black"; text = "RIDE COMPLETED"; icon = <Star size={16} />; }
+    
     return (
         <div className={`fixed top-0 left-0 right-0 ${bg} text-white px-4 py-3 z-[5000] shadow-xl animate-in slide-in-from-top flex items-center justify-center gap-3`}>
             {icon} <span className="font-bold text-xs tracking-widest">{text}</span>
@@ -38,7 +40,6 @@ const FindingVolunteer = ({ onCancel }) => (
     </div>
 );
 
-// --- VOLUNTEER PROFILE MODAL ---
 const VolunteerProfileModal = ({ volunteer, onClose }) => {
     if (!volunteer) return null;
     return (
@@ -48,63 +49,34 @@ const VolunteerProfileModal = ({ volunteer, onClose }) => {
                     <h3 className="text-xl font-bold text-white">Volunteer Profile</h3>
                     <button onClick={onClose} className="p-2 bg-[#222] rounded-full text-white hover:bg-red-600 transition"><X size={18}/></button>
                 </div>
-
                 <div className="flex items-center gap-4 mb-6">
-                    <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-3xl font-bold text-white border-4 border-[#222]">
-                        {volunteer.name?.charAt(0)}
-                    </div>
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-3xl font-bold text-white border-4 border-[#222]">{volunteer.name?.charAt(0)}</div>
                     <div>
                         <h2 className="text-2xl font-bold text-white">{volunteer.name}</h2>
-                        <div className="flex items-center gap-1 text-green-500 text-xs font-bold uppercase mt-1">
-                            <Shield size={12} fill="currentColor"/> Verified Partner
-                        </div>
+                        <div className="flex items-center gap-1 text-green-500 text-xs font-bold uppercase mt-1"><Shield size={12} fill="currentColor"/> Verified Partner</div>
                     </div>
                 </div>
-
                 <div className="space-y-3 mb-8">
                     {volunteer.isGeriatricTrained && (
                         <div className="bg-green-900/20 border border-green-500/30 p-3 rounded-xl flex items-center gap-3">
                             <div className="bg-green-500/20 p-2 rounded-lg text-green-400"><Stethoscope size={20}/></div>
-                            <div>
-                                <p className="text-white font-bold text-sm">Geriatric Trained</p>
-                                <p className="text-gray-400 text-xs">Certified for elderly care</p>
-                            </div>
+                            <div><p className="text-white font-bold text-sm">Geriatric Trained</p><p className="text-gray-400 text-xs">Certified for elderly care</p></div>
                         </div>
                     )}
-                    
                     <div className="bg-[#1a1a1a] p-3 rounded-xl flex items-center justify-between border border-white/5">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-500/10 p-2 rounded-lg text-blue-400"><Phone size={18}/></div>
-                            <p className="text-gray-300 text-sm">{volunteer.phone || "No number"}</p>
-                        </div>
+                        <div className="flex items-center gap-3"><div className="bg-blue-500/10 p-2 rounded-lg text-blue-400"><Phone size={18}/></div><p className="text-gray-300 text-sm">{volunteer.phone || "No number"}</p></div>
                         <button className="text-xs bg-white text-black px-3 py-1.5 rounded-lg font-bold">Call</button>
                     </div>
-
-                    <div className="bg-[#1a1a1a] p-3 rounded-xl flex items-center justify-between border border-white/5">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-purple-500/10 p-2 rounded-lg text-purple-400"><FileText size={18}/></div>
-                            <p className="text-gray-300 text-sm">Training Certificate</p>
-                        </div>
-                        {volunteer.trainingCertificate ? <span className="text-xs text-green-400 font-bold">Verified</span> : <span className="text-xs text-gray-500">N/A</span>}
-                    </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#1a1a1a] p-3 rounded-xl text-center border border-white/5">
-                        <p className="text-gray-500 text-xs uppercase font-bold">Rating</p>
-                        <p className="text-white font-black text-xl flex items-center justify-center gap-1">4.9 <Star size={14} className="text-yellow-400 fill-current"/></p>
-                    </div>
-                    <div className="bg-[#1a1a1a] p-3 rounded-xl text-center border border-white/5">
-                        <p className="text-gray-500 text-xs uppercase font-bold">Trips</p>
-                        <p className="text-white font-black text-xl">142</p>
-                    </div>
+                    <div className="bg-[#1a1a1a] p-3 rounded-xl text-center border border-white/5"><p className="text-gray-500 text-xs uppercase font-bold">Rating</p><p className="text-white font-black text-xl flex items-center justify-center gap-1">4.9 <Star size={14} className="text-yellow-400 fill-current"/></p></div>
+                    <div className="bg-[#1a1a1a] p-3 rounded-xl text-center border border-white/5"><p className="text-gray-500 text-xs uppercase font-bold">Trips</p><p className="text-white font-black text-xl">142</p></div>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- ARRIVING VIEW ---
 const ArrivingView = ({ rideData, onViewProfile }) => (
     <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#121212] border border-white/10 p-6 rounded-[32px] shadow-2xl text-white animate-in slide-in-from-bottom">
         <div className="flex justify-between items-start mb-6 mt-2">
@@ -116,26 +88,18 @@ const ArrivingView = ({ rideData, onViewProfile }) => (
                     <div className="text-green-400 font-bold text-lg">₹{rideData?.price}</div>
                 </div>
             </div>
-            <div 
-                className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full border-2 border-white/20 flex items-center justify-center shadow-lg cursor-pointer hover:scale-105 transition"
-                onClick={onViewProfile}
-            >
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full border-2 border-white/20 flex items-center justify-center shadow-lg cursor-pointer hover:scale-105 transition" onClick={onViewProfile}>
                 <span className="text-2xl font-bold">{rideData?.volunteerName?.charAt(0)}</span>
             </div>
         </div>
-        
         <div className="grid grid-cols-2 gap-3 mb-4">
             <button className="bg-green-600 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition hover:bg-green-500"><Phone size={20}/> Call</button>
             <button className="bg-[#222] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition hover:bg-[#333]"><Navigation size={20}/> Message</button>
         </div>
-        
-        <button onClick={onViewProfile} className="w-full py-3 text-sm font-bold text-gray-400 hover:text-white transition border-t border-white/5">
-            View Full Volunteer Profile
-        </button>
+        <button onClick={onViewProfile} className="w-full py-3 text-sm font-bold text-gray-400 hover:text-white transition border-t border-white/5">View Full Volunteer Profile</button>
     </div>
 );
 
-// --- RIDE IN PROGRESS ---
 const RideInProgress = ({ requestData }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     if (!requestData) return null;
@@ -145,10 +109,7 @@ const RideInProgress = ({ requestData }) => {
             <div className="px-6">
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
-                            <p className="text-green-500 text-xs font-bold uppercase tracking-widest">ON TRIP</p>
-                        </div>
+                        <div className="flex items-center gap-2 mb-1"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span><p className="text-green-500 text-xs font-bold uppercase tracking-widest">ON TRIP</p></div>
                         <h2 className="text-3xl font-black text-white">{isExpanded ? "Your Ride" : requestData.volunteerName}</h2>
                     </div>
                     <button className="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center border border-white/10 text-white"><Share2 size={18}/></button>
@@ -164,11 +125,11 @@ const RideInProgress = ({ requestData }) => {
     );
 };
 
-// --- RATE AND TIP (WITH FEEDBACK) ---
-const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
+// --- UPDATED RATE AND TIP COMPONENT ---
+const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
     const [rating, setRating] = useState(5);
+    const [feedback, setFeedback] = useState('');
     const [selectedTip, setSelectedTip] = useState(0);
-    const [feedback, setFeedback] = useState("");
     const [loading, setLoading] = useState(false);
     const [paymentMode, setPaymentMode] = useState('online');
 
@@ -176,44 +137,61 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
         setLoading(true);
         try {
             await fetch(`${API_BASE}/api/requests/${requestData._id}/review`, {
-                method: 'PUT', headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rating, feedback, tip: selectedTip, paymentMethod: method })
+                method: 'PUT',
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rating, review: feedback, tip: selectedTip, paymentMethod: method })
             });
-            alert("Feedback Submitted!");
-            onSubmit();
-        } catch (err) { onSubmit(); } finally { setLoading(false); }
+            alert("Feedback Submitted!"); // Simple alert for fallback
+            onSubmit(); 
+        } catch (err) { onSubmit(); } 
+        finally { setLoading(false); }
     };
-
-    const handleCashPayment = () => {
-        setLoading(true);
-        alert(`Please give ₹${selectedTip} cash to volunteer.`);
-        setTimeout(() => { handleFinalSubmit('cash'); }, 2000);
-    };
-
-    const handleOnlinePayment = () => { handleFinalSubmit('online'); };
 
     return (
-        <div className="fixed inset-0 z-[3000] bg-white flex flex-col items-center justify-center p-6 animate-in zoom-in">
-            <div className="text-center mb-6"><div className="mx-auto bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mb-4"><CheckCircle size={40} className="text-green-600" /></div><h2 className="text-3xl font-black text-gray-900">Ride Completed!</h2><p className="text-gray-500 mt-2 font-medium">Rate {requestData?.volunteerName}</p></div>
+        <div className="fixed inset-0 z-[6000] bg-white flex flex-col items-center justify-center p-6 animate-in zoom-in font-sans">
+            <div className="text-center mb-6">
+                <div className="mx-auto bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mb-4"><CheckCircle size={40} className="text-green-600" /></div>
+                <h2 className="text-3xl font-black text-gray-900">Ride Completed!</h2>
+                <p className="text-gray-500 mt-2 font-medium">How was {requestData?.volunteerName}?</p>
+            </div>
             
-            {/* Stars */}
-            <div className="flex justify-center gap-3 mb-6">{[1, 2, 3, 4, 5].map(star => (<Star key={star} size={40} className={`cursor-pointer transition hover:scale-110 ${star <= rating ? 'text-yellow-400 fill-current' : 'text-gray-200'}`} onClick={() => setRating(star)}/>))}</div>
+            <div className="flex justify-center gap-3 mb-6">
+                {[1, 2, 3, 4, 5].map(star => (
+                    <Star key={star} size={40} className={`cursor-pointer transition hover:scale-110 ${star <= rating ? 'text-yellow-400 fill-current' : 'text-gray-200'}`} onClick={() => setRating(star)}/>
+                ))}
+            </div>
             
-            {/* Feedback Box */}
             <div className="w-full max-w-sm mb-6 relative">
                 <MessageSquare className="absolute left-4 top-4 text-gray-400" size={18} />
-                <textarea className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 pl-12 text-sm focus:outline-none focus:border-green-500 resize-none text-gray-700" rows="2" placeholder="Write a review (optional)..." value={feedback} onChange={(e) => setFeedback(e.target.value)}/>
+                <textarea className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 pl-12 text-sm focus:outline-none focus:border-green-500 resize-none text-gray-700" rows="2" placeholder="Write a review..." value={feedback} onChange={(e) => setFeedback(e.target.value)}/>
             </div>
 
-            {/* Tip */}
             <p className="font-bold text-gray-700 mb-3 text-center text-xs uppercase tracking-wide">Add a Tip</p>
-            <div className="grid grid-cols-4 gap-3 mb-6 w-full max-w-sm">{[0, 20, 50, 100].map(amt => (<button key={amt} onClick={() => setSelectedTip(amt)} className={`py-3 rounded-xl font-bold border transition ${selectedTip === amt ? 'bg-black text-white' : 'bg-gray-50 text-gray-700'}`}>{amt === 0 ? "No" : `₹${amt}`}</button>))}</div>
+            <div className="grid grid-cols-4 gap-3 mb-6 w-full max-w-sm">
+                {[0, 20, 50, 100].map(amt => (
+                    <button key={amt} onClick={() => setSelectedTip(amt)} className={`py-3 rounded-xl font-bold border transition ${selectedTip === amt ? 'bg-black text-white' : 'bg-gray-50 text-gray-700'}`}>{amt === 0 ? "No" : `₹${amt}`}</button>
+                ))}
+            </div>
             
-            {selectedTip > 0 && (<div className="bg-blue-50 p-4 rounded-xl mb-6 w-full max-w-sm border border-blue-100"><p className="text-xs font-bold text-blue-600 uppercase mb-3 flex items-center"><ShieldCheck size={14} className="mr-1"/> Payment Method</p><div className="flex gap-3"><button onClick={() => setPaymentMode('online')} className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition ${paymentMode === 'online' ? 'border-blue-600 bg-white text-blue-700' : 'border-transparent bg-blue-100/50 text-gray-500'}`}><CreditCard size={24} className="mb-1"/><span className="text-xs font-bold">Online</span></button><button onClick={() => setPaymentMode('cash')} className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition ${paymentMode === 'cash' ? 'border-green-600 bg-white text-green-700' : 'border-transparent bg-green-100/50 text-gray-500'}`}><Banknote size={24} className="mb-1"/><span className="text-xs font-bold">Cash</span></button></div></div>)}
+            {selectedTip > 0 && (
+                <div className="bg-blue-50 p-4 rounded-xl mb-6 w-full max-w-sm border border-blue-100">
+                    <p className="text-xs font-bold text-blue-600 uppercase mb-3 flex items-center"><ShieldCheck size={14} className="mr-1"/> Payment Method</p>
+                    <div className="flex gap-3">
+                        <button onClick={() => setPaymentMode('online')} className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition ${paymentMode === 'online' ? 'border-blue-600 bg-white text-blue-700' : 'border-transparent bg-blue-100/50 text-gray-500'}`}><CreditCard size={24} className="mb-1"/><span className="text-xs font-bold">Online</span></button>
+                        <button onClick={() => setPaymentMode('cash')} className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition ${paymentMode === 'cash' ? 'border-green-600 bg-white text-green-700' : 'border-transparent bg-green-100/50 text-gray-500'}`}><Banknote size={24} className="mb-1"/><span className="text-xs font-bold">Cash</span></button>
+                    </div>
+                </div>
+            )}
             
-            {selectedTip > 0 ? (<button onClick={paymentMode === 'online' ? handleOnlinePayment : handleCashPayment} disabled={loading} className={`w-full max-w-sm text-white font-bold py-4 rounded-2xl mb-3 transition flex items-center justify-center shadow-lg active:scale-95 ${paymentMode === 'online' ? 'bg-[#3395ff]' : 'bg-green-600'}`}>{loading ? <Loader2 className="animate-spin mr-2"/> : paymentMode === 'online' ? `Pay ₹${selectedTip}` : `Confirm Cash Payment`}</button>) : (<button onClick={() => handleFinalSubmit('none')} className="w-full max-w-sm bg-black text-white font-bold py-4 rounded-2xl mb-3 hover:bg-gray-800 shadow-lg active:scale-95">Submit Review</button>)}
+            <button 
+                onClick={() => handleFinalSubmit(selectedTip > 0 ? paymentMode : 'none')} 
+                disabled={loading} 
+                className={`w-full max-w-sm text-white font-bold py-4 rounded-2xl mb-3 transition flex items-center justify-center shadow-lg active:scale-95 ${paymentMode === 'online' && selectedTip > 0 ? 'bg-[#3395ff]' : selectedTip > 0 ? 'bg-green-600' : 'bg-black'}`}
+            >
+                {loading ? <Loader2 className="animate-spin"/> : selectedTip > 0 ? (paymentMode === 'online' ? `Pay ₹${selectedTip}` : `Confirm Cash Payment`) : "Submit Review"}
+            </button>
             
-            <button onClick={onSkip} className="text-gray-400 font-bold text-sm">Skip</button>
+            <button onClick={onSkip} className="text-gray-400 font-bold text-sm">Skip Feedback</button>
         </div>
     );
 };
@@ -229,25 +207,22 @@ const UserDashboard = () => {
     const [showProfile, setShowProfile] = useState(false);
     const pollRef = useRef(null);
 
-    // Initial Load Persistence
+    // Initial Load
     useEffect(() => {
         const savedId = localStorage.getItem('activeRideId');
         if (savedId) {
-            setViewState('searching');
             startPolling(savedId);
         }
     }, []);
 
-    // FETCH PROFILE
     const fetchVolunteerDetails = async (volunteerId) => {
         if (!volunteerId) return;
         try {
             const res = await fetch(`${API_BASE}/api/auth/user/${volunteerId}`);
             if (res.ok) setVolunteerDetails(await res.json());
-        } catch (e) { console.error(e); }
+        } catch (e) {}
     };
 
-    // REQUEST HANDLER
     const handleRequest = async (requestDetails) => {
         try {
             const user = JSON.parse(localStorage.getItem('user'));
@@ -272,31 +247,36 @@ const UserDashboard = () => {
         } catch (e) { alert("Connection Error"); }
     };
 
-    // POLLING LOGIC
     const startPolling = (id) => {
         if (pollRef.current) clearTimeout(pollRef.current);
+        
         const poll = async () => {
             try {
+                // Polling the specific request endpoint is more efficient than getting all requests
+                // But keeping existing logic to avoid backend refactor
                 const res = await fetch(`${API_BASE}/api/requests?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
+                    // Assuming data is an array, we find our specific request
                     const myRide = data.find(r => r._id === id);
                     
                     if (myRide) {
                         setActiveRide(myRide);
                         
-                        // Fetch Profile if accepted
-                        if ((myRide.status === 'accepted' || myRide.status === 'in_progress') && !volunteerDetails) {
-                            fetchVolunteerDetails(myRide.volunteerId);
+                        // Status Logic
+                        if (myRide.status === 'accepted') {
+                            setViewState('active_ride');
+                            if (!volunteerDetails) fetchVolunteerDetails(myRide.volunteerId);
+                        } 
+                        else if (myRide.status === 'in_progress') {
+                            setViewState('active_ride');
                         }
-
-                        // State Management
-                        if (myRide.status === 'accepted' && viewState !== 'active_ride') setViewState('active_ride');
-                        if (myRide.status === 'in_progress' && viewState !== 'active_ride') setViewState('active_ride');
-                        if (myRide.status === 'completed' && viewState !== 'completed') {
-                            setViewState('completed');
+                        else if (myRide.status === 'completed') {
+                            setViewState('completed'); // ✅ Forces the RateAndTip view
                             localStorage.removeItem('activeRideId');
-                            return; 
+                            return; // Stop Polling
+                        } else {
+                            setViewState('searching');
                         }
                     }
                 }
@@ -309,20 +289,20 @@ const UserDashboard = () => {
     const handleReset = () => {
         if (pollRef.current) clearTimeout(pollRef.current);
         localStorage.removeItem('activeRideId');
+        setActiveRide(null);
         setViewState('menu');
-        window.location.reload();
     };
 
     return (
         <div className="h-screen bg-neutral-100 text-black font-sans flex flex-col relative overflow-hidden">
-            {/* Map (Hidden when rating) */}
+            {/* Map Background (Hidden during feedback) */}
             {viewState !== 'completed' && (
                 <div className="absolute inset-0 z-0">
                     <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src="https://www.openstreetmap.org/export/embed.html?bbox=76.51%2C9.58%2C76.54%2C9.60&amp;layer=mapnik&amp;marker=9.59%2C76.52" style={{ filter: 'grayscale(100%) invert(90%) contrast(120%)' }}></iframe>
                 </div>
             )}
 
-            {/* Status & Menu */}
+            {/* Top Bar */}
             {viewState !== 'completed' && (
                 <div className="absolute top-0 w-full z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
                     <button onClick={handleReset} className="p-3 bg-neutral-800/80 rounded-full text-white backdrop-blur-md border border-white/10 hover:bg-neutral-700 transition"><Menu size={20}/></button>
@@ -332,9 +312,9 @@ const UserDashboard = () => {
                 </div>
             )}
 
-            {activeRide && <StatusBanner status={activeRide.status} />}
+            {activeRide && viewState !== 'completed' && <StatusBanner status={activeRide.status} />}
 
-            {/* Views */}
+            {/* State-Based Views */}
             {viewState === 'menu' && <ServiceSelector onFindClick={handleRequest} />}
             {viewState === 'searching' && <FindingVolunteer onCancel={handleReset} />}
 
@@ -346,6 +326,8 @@ const UserDashboard = () => {
             )}
 
             {viewState === 'active_ride' && activeRide?.status === 'in_progress' && <RideInProgress requestData={activeRide} />}
+            
+            {/* ✅ Feedback Screen */}
             {viewState === 'completed' && <RateAndTip requestData={activeRide} onSkip={handleReset} onSubmit={handleReset} />}
         </div>
     );
