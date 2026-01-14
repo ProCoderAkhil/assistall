@@ -1,76 +1,61 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const AccessCode = require('../models/AccessCode');
 const Request = require('../models/Request');
 
-// 1. Generate OTP Code (Admin sees this and tells Volunteer)
-router.post('/generate-code', async (req, res) => {
+// 1. GET PENDING VOLUNTEERS (Fix for your issue)
+router.get('/pending-volunteers', async (req, res) => {
     try {
-        // Generate random 6-digit code
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        
-        // Delete old codes to keep it secure (only 1 active code at a time)
-        await AccessCode.deleteMany({});
-
-        const newCode = new AccessCode({ code });
-        await newCode.save();
-
-        res.json({ code });
-    } catch (err) {
-        res.status(500).json({ message: 'Generation failed' });
-    }
-});
-
-// 2. Get Current Active Code (To display on Admin Dashboard)
-router.get('/code', async (req, res) => {
-    try {
-        const activeCode = await AccessCode.findOne().sort({ createdAt: -1 });
-        res.json({ code: activeCode ? activeCode.code : null });
-    } catch (err) {
-        res.status(500).send("Server Error");
-    }
-});
-
-// 3. Get Volunteers (Pending List)
-router.get('/volunteers', async (req, res) => {
-    try {
-        const volunteers = await User.find({ role: 'volunteer' }).select('-password');
+        // Fetch users who are volunteers AND pending
+        const volunteers = await User.find({ 
+            role: 'volunteer', 
+            verificationStatus: 'pending' 
+        }).sort({ createdAt: -1 }); // Newest first
         res.json(volunteers);
-    } catch (err) {
-        res.status(500).send("Server Error");
-    }
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
-// 4. Approve/Verify Volunteer (Final Button Click)
+// 2. GET ALL USERS (For User Dashboard)
+router.get('/all-users', async (req, res) => {
+    try {
+        const users = await User.find({ role: 'user' }).select('-password').sort({ createdAt: -1 });
+        res.json(users);
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
+});
+
+// 3. GET ACTIVE SOS ALERTS (For SOS Dashboard)
+router.get('/sos-alerts', async (req, res) => {
+    try {
+        // Assuming requests with 'in_progress' might be SOS candidates, 
+        // or we filter by specific SOS flag if you add one later.
+        // For now, we return active rides as "Safety Monitoring"
+        const alerts = await Request.find({ status: 'in_progress' }).sort({ createdAt: -1 });
+        res.json(alerts);
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
+});
+
+// 4. VERIFY VOLUNTEER ACTION
 router.put('/verify/:id', async (req, res) => {
     try {
-        const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        // Toggle status
-        user.isVerified = !user.isVerified;
-        user.verificationStatus = user.isVerified ? 'approved' : 'pending';
+        const { status } = req.body; // 'approved' or 'rejected'
+        const isVerified = status === 'approved';
         
-        await user.save();
-        res.json(user);
-    } catch (err) {
-        res.status(500).json({ message: 'Update failed' });
-    }
+        await User.findByIdAndUpdate(req.params.id, { 
+            verificationStatus: status,
+            isVerified: isVerified
+        });
+        
+        res.json({ message: `Volunteer ${status}` });
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
-// 5. Dashboard Stats
-router.get('/stats', async (req, res) => {
+// 5. BAN USER
+router.put('/ban-user/:id', async (req, res) => {
     try {
-        const volunteers = await User.countDocuments({ role: 'volunteer' });
-        const users = await User.countDocuments({ role: 'user' });
-        const rides = await Request.countDocuments({});
-        const recent = await Request.find().sort({ createdAt: -1 }).limit(5);
-        
-        res.json({ volunteers, users, rides, earnings: rides * 150, recent });
-    } catch (err) {
-        res.status(500).send("Server Error");
-    }
+        // Toggle active status (assuming you add an isActive field later, or verify logic)
+        await User.findByIdAndUpdate(req.params.id, { isVerified: false }); 
+        res.json({ message: "User Suspended" });
+    } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
 module.exports = router;
