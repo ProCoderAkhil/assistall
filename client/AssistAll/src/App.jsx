@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Bell, Shield, X, AlertTriangle } from 'lucide-react';
+import { Menu, Bell, Shield, AlertTriangle } from 'lucide-react';
 
 // Components
 import BottomNav from './components/BottomNav';
@@ -34,17 +34,9 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="h-screen bg-black flex flex-col items-center justify-center text-white p-6 text-center font-sans">
-          <div className="p-6 bg-red-900/20 rounded-full mb-6">
-            <AlertTriangle size={48} className="text-red-500"/>
-          </div>
+          <div className="p-6 bg-red-900/20 rounded-full mb-6"><AlertTriangle size={48} className="text-red-500"/></div>
           <h1 className="text-2xl font-black mb-2">System Malfunction</h1>
-          <p className="text-gray-500 mb-8 max-w-xs mx-auto">Critical error in core matrix.</p>
-          <button 
-            onClick={() => { localStorage.clear(); window.location.href = '/'; }} 
-            className="bg-white text-black px-8 py-3 rounded-full font-bold hover:scale-105 transition"
-          >
-            Hard Reset
-          </button>
+          <button onClick={() => { localStorage.clear(); window.location.href = '/'; }} className="bg-white text-black px-8 py-3 rounded-full font-bold mt-6">Hard Reset</button>
         </div>
       );
     }
@@ -54,17 +46,7 @@ class ErrorBoundary extends React.Component {
 
 function App() {
   const [user, setUser] = useState(() => {
-      try {
-          const savedUser = localStorage.getItem('user');
-          const savedToken = localStorage.getItem('token');
-          if (savedUser && savedUser !== "undefined" && savedToken) {
-              return JSON.parse(savedUser);
-          }
-          return null;
-      } catch (e) { 
-          localStorage.clear(); 
-          return null; 
-      }
+      try { return JSON.parse(localStorage.getItem('user')); } catch (e) { return null; }
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -78,10 +60,7 @@ function App() {
 
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
 
-  useEffect(() => { 
-      const timer = setTimeout(() => setIsLoading(false), 2000); 
-      return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => { setTimeout(() => setIsLoading(false), 2000); }, []);
 
   useEffect(() => {
       if (!isLoading && user && (location.pathname === '/login' || location.pathname === '/' || location.pathname === '/register')) {
@@ -100,7 +79,6 @@ function App() {
               const data = await res.json();
               const myRequest = data.find(r => r._id === activeRequestId);
               if (myRequest) {
-                 // Check if status actually changed to prevent loop
                  if (myRequest.status === 'accepted' && step !== 'found') {
                     setAcceptedRequestData(myRequest); setStep('found'); showToast(`Volunteer Found!`, 'success');
                  } else if (myRequest.status === 'in_progress' && step !== 'in_progress') {
@@ -119,17 +97,12 @@ function App() {
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', token);
       setUser(userData);
-      
       if(userData.role === 'volunteer') navigate('/volunteer');
       else if(userData.role === 'admin') navigate('/admin');
       else navigate('/home');
   };
 
-  const handleLogout = () => { 
-      localStorage.clear(); 
-      setUser(null); 
-      navigate('/'); 
-  };
+  const handleLogout = () => { localStorage.clear(); setUser(null); navigate('/'); };
 
   const handleFindVolunteer = async (bookingDetails) => { 
     setStep('searching'); 
@@ -137,8 +110,13 @@ function App() {
       const res = await fetch(`${DEPLOYED_API_URL}/api/requests`, {
         method: 'POST', headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            requesterName: user.name, requesterId: user._id, type: bookingDetails.type, 
-            dropOffLocation: bookingDetails.dropOff, location: { lat: 9.5916, lng: 76.5222 },
+            requesterName: user.name, requesterId: user._id, 
+            type: bookingDetails.type, 
+            price: 150, // Ensure price is sent
+            // ✅ FIX: Send 'drop' instead of 'dropOffLocation' to match Schema
+            drop: bookingDetails.dropOff, 
+            pickup: "Current Location",
+            location: { lat: 9.5916, lng: 76.5222 },
             isScheduled: bookingDetails.isScheduled,
             scheduledTime: bookingDetails.scheduledTime
         }),
@@ -151,11 +129,8 @@ function App() {
 
   return (
     <ErrorBoundary>
-      {isLoading ? (
-        <AppLoader />
-      ) : (
+      {isLoading ? <AppLoader /> : (
         <div className="h-screen w-full bg-[#050505] font-sans text-white relative overflow-hidden">
-          
           <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4 pointer-events-none">
               {toast && <div className="pointer-events-auto"><Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} /></div>}
           </div>
@@ -181,7 +156,6 @@ function App() {
                     {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
                     {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
                     {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} onSubmit={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} showToast={showToast} />}
-                    
                     <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
                     <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => { setShowSOS(false); showToast("SOS Alert Sent!", "error"); }} />
                 </>

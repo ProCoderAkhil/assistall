@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
-import { Car, HeartHandshake, ShoppingBag, Pill, ArrowRight, Search, Zap, Calendar, Clock } from 'lucide-react';
+import { Car, HeartHandshake, ShoppingBag, Pill, ArrowRight, Search, Zap, Calendar, MapPin, ChevronDown, Check } from 'lucide-react';
 
 const ServiceSelector = ({ onClose, onFindClick }) => { 
   const [serviceType, setServiceType] = useState('Transport');
-  const [dropOff, setDropOff] = useState('');
+  const [selectedDest, setSelectedDest] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
-  
-  // --- SCHEDULING STATE ---
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduleTime, setScheduleTime] = useState('');
 
-  const hospitals = ["Government Medical College", "Caritas Hospital", "Matha Hospital", "General Hospital", "KIMS Health", "Mandiram Hospital"];
+  const hospitals = [
+      { name: "Government Medical College", dist: "2.4 km" },
+      { name: "Caritas Hospital", dist: "4.1 km" },
+      { name: "Matha Hospital", dist: "1.8 km" },
+      { name: "General Hospital", dist: "3.5 km" },
+      { name: "KIMS Health", dist: "5.2 km" },
+      { name: "Mandiram Hospital", dist: "6.0 km" }
+  ];
+
+  const filteredHospitals = hospitals.filter(h => 
+      h.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const services = [
       { id: 'Transport', label: 'Ride', icon: Car, surge: false },
       { id: 'Companion', label: 'Helper', icon: HeartHandshake, surge: false },
@@ -19,10 +31,10 @@ const ServiceSelector = ({ onClose, onFindClick }) => {
   ];
 
   const handleSubmit = () => {
-      if(!dropOff) return alert("Please enter a destination");
+      if(!selectedDest) return alert("Please select a destination");
       onFindClick({ 
           type: serviceType, 
-          dropOff,
+          dropOff: selectedDest,
           isScheduled,
           scheduledTime: isScheduled ? scheduleTime : null
       });
@@ -34,11 +46,51 @@ const ServiceSelector = ({ onClose, onFindClick }) => {
             <div className="w-full flex justify-center pt-4 pb-2 cursor-pointer" onClick={() => setIsExpanded(false)}><div className="w-12 h-1.5 bg-neutral-700 rounded-full"></div></div>
             <div className="p-6 pt-2">
                 
-                {/* Search */}
-                <div className="bg-[#1a1a1a] p-4 rounded-2xl flex items-center border border-white/5 mb-6">
-                    <div className="bg-green-600/20 text-green-500 p-2 rounded-xl mr-3"><Search size={20}/></div>
-                    <input type="text" list="hospital-list" placeholder="Where to?" className="w-full bg-transparent outline-none font-bold text-lg text-white" value={dropOff} onChange={(e) => setDropOff(e.target.value)}/>
-                    <datalist id="hospital-list">{hospitals.map((h, i) => <option key={i} value={h} />)}</datalist>
+                {/* --- MODERN DROPDOWN --- */}
+                <div className="relative mb-6">
+                    <div 
+                        className={`flex items-center bg-[#1a1a1a] p-4 rounded-2xl border transition-all cursor-pointer ${isDropdownOpen ? 'border-green-500 ring-1 ring-green-500/30' : 'border-white/10'}`}
+                    >
+                        <div className="bg-green-500/20 text-green-500 p-2 rounded-xl mr-3"><Search size={20}/></div>
+                        <input 
+                            type="text"
+                            placeholder="Where to?" 
+                            className="w-full bg-transparent outline-none font-bold text-lg text-white placeholder-gray-500 cursor-pointer"
+                            value={selectedDest || searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setSelectedDest(''); 
+                                setIsDropdownOpen(true);
+                            }}
+                            onClick={() => setIsDropdownOpen(true)}
+                        />
+                        <ChevronDown size={20} className={`text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}/>
+                    </div>
+
+                    {/* Dropdown Menu */}
+                    {isDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-3 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 scrollbar-hide">
+                            {filteredHospitals.map((h, i) => (
+                                <div 
+                                    key={i} 
+                                    onClick={() => { setSelectedDest(h.name); setIsDropdownOpen(false); }}
+                                    className="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-neutral-800 p-2 rounded-full text-gray-400 group-hover:bg-green-500 group-hover:text-black transition"><MapPin size={16}/></div>
+                                        <div>
+                                            <p className="text-white font-bold text-sm">{h.name}</p>
+                                            <p className="text-gray-500 text-xs">{h.dist} away</p>
+                                        </div>
+                                    </div>
+                                    {selectedDest === h.name && <Check size={16} className="text-green-500"/>}
+                                </div>
+                            ))}
+                            {filteredHospitals.length === 0 && (
+                                <div className="p-4 text-center text-gray-500 text-sm">No locations found.</div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Services */}
@@ -52,7 +104,7 @@ const ServiceSelector = ({ onClose, onFindClick }) => {
                     ))}
                 </div>
 
-                {/* --- SCHEDULE TOGGLE --- */}
+                {/* Schedule Toggle */}
                 <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
                     <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2"><Calendar size={18} className="text-blue-400"/><span className="font-bold text-sm text-white">Schedule for Later?</span></div>

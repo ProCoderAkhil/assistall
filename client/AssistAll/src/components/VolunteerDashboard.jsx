@@ -230,8 +230,35 @@ const VolunteerDashboard = ({ user, globalToast }) => {
             {!activeJob && requests.map(req => (
                 <div key={req._id} className="absolute bottom-24 left-4 right-4 bg-[#121212] text-white p-6 rounded-[32px] shadow-2xl border border-white/10 z-20 animate-in slide-in-from-bottom duration-300">
                     <div className="flex justify-between items-center mb-4"><div className="bg-green-500/10 text-green-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase border border-green-500/20 flex items-center gap-1"><Zap size={12} fill="currentColor"/> High Pay</div><span className="text-neutral-400 text-xs font-bold">Nearby</span></div>
-                    <div className="flex justify-between items-end mb-6"><div><p className="text-neutral-500 text-[10px] uppercase font-bold mb-1 tracking-wider">PASSENGER</p><h3 className="text-2xl font-bold">{req.requesterName}</h3></div><div className="text-right"><p className="text-3xl font-black text-white">₹150</p><p className="text-neutral-500 text-[10px] uppercase font-bold tracking-wider">ESTIMATED</p></div></div>
-                    <button onClick={() => handleAction(req._id, 'accept')} className="w-full bg-white text-black font-black py-4 rounded-2xl text-lg shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-[0.98] transition-all hover:bg-gray-200">Tap to Accept</button>
+                    <div className="flex justify-between items-end mb-6">
+                        <div>
+                            <p className="text-neutral-500 text-[10px] uppercase font-bold mb-1 tracking-wider">PASSENGER</p>
+                            <h3 className="text-2xl font-bold">{req.requesterName}</h3>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-3xl font-black text-white">₹{req.price || 150}</p>
+                            <p className="text-neutral-500 text-xs font-bold tracking-wider">ESTIMATED</p>
+                        </div>
+                    </div>
+                    
+                    {/* --- ACTION BUTTONS (Added Dismiss) --- */}
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setRequests(prev => prev.filter(r => r._id !== req._id));
+                            }} 
+                            className="w-16 bg-[#222] text-white rounded-2xl flex items-center justify-center hover:bg-red-900/30 hover:text-red-500 transition border border-white/5 active:scale-95"
+                        >
+                            <X size={24} />
+                        </button>
+                        <button 
+                            onClick={() => handleAction(req._id, 'accept')} 
+                            className="flex-1 bg-white text-black font-black py-4 rounded-2xl text-lg shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-[0.98] transition-all hover:bg-gray-200"
+                        >
+                            Tap to Accept
+                        </button>
+                    </div>
                 </div>
             ))}
         </div>
