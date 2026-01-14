@@ -1,26 +1,30 @@
 import React, { useState, useRef } from 'react';
 import { 
   User, Mail, Lock, Shield, ArrowLeft, Loader2, Key, 
-  Camera, Upload, X, FileText, ChevronRight, MapPin, Phone, Video, Stethoscope
+  Camera, Upload, FileText, MapPin, Phone, Video, Stethoscope, Car, HeartHandshake, Briefcase, ChevronRight
 } from 'lucide-react';
 
 const VolunteerSignup = ({ onRegister, onBack }) => {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', govtId: '', address: '', phone: '', adminCode: '' });
+  const [formData, setFormData] = useState({ 
+      name: '', email: '', password: '', address: '', phone: '', adminCode: '',
+      serviceSector: 'transport', // Default
+      vehicleType: 'Car', vehicleModel: '', vehicleNumber: '' 
+  });
+  
+  // File States
+  const [govtIdFile, setGovtIdFile] = useState(null);
+  const [licenseFile, setLicenseFile] = useState(null);
+  const [medicalFile, setMedicalFile] = useState(null);
+  
+  // Camera
   const [capturedImage, setCapturedImage] = useState(null);
-  const [idFile, setIdFile] = useState(null);
-  
-  // NEW: Geriatric State
-  const [isGeriatric, setIsGeriatric] = useState(false);
-  const [certFile, setCertFile] = useState(null);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
-  // Camera state
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://assistall-server.onrender.com';
 
@@ -31,18 +35,27 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
   const handleSubmit = async () => {
     setLoading(true); setError('');
     if (!formData.adminCode) { setError("Enter verification code from Admin."); setLoading(false); return; }
+    
     try {
+      // Build Payload based on Sector
+      const payload = {
+          ...formData,
+          role: 'volunteer',
+          govtId: govtIdFile ? govtIdFile.name : 'uploaded_id.jpg', // In real app, upload to cloud first
+          drivingLicense: licenseFile ? licenseFile.name : '',
+          medicalCertificate: medicalFile ? medicalFile.name : '',
+          vehicleDetails: formData.serviceSector === 'transport' ? {
+              type: formData.vehicleType,
+              model: formData.vehicleModel,
+              number: formData.vehicleNumber
+          } : {}
+      };
+
       const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            ...formData, 
-            role: 'volunteer',
-            isGeriatricTrained: isGeriatric,
-            // In a real app, you'd upload files to S3/Cloudinary and send URLs here.
-            // For this demo, we are just sending the flag.
-            trainingCertificate: certFile ? certFile.name : ''
-        })
+        body: JSON.stringify(payload)
       });
+      
       const data = await res.json();
       if (res.ok) onRegister(data.user, data.token);
       else setError(data.message || "Invalid Code");
@@ -51,24 +64,24 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
 
   return (
     <div className="min-h-screen bg-black text-white font-sans flex items-center justify-center p-6 relative overflow-hidden">
-        {/* V6 Background */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#111_1px,transparent_1px),linear-gradient(to_bottom,#111_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20"></div>
         
         <div className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] p-8 rounded-[32px] shadow-2xl relative z-10 animate-in zoom-in duration-300">
             <button onClick={onBack} className="absolute top-6 left-6 p-2 rounded-full hover:bg-[#222] transition text-gray-500 hover:text-white"><ArrowLeft size={20}/></button>
             
+            {/* Progress Dots */}
             <div className="flex justify-center gap-2 mb-8 mt-2">
                 {[1,2,3].map(i => <div key={i} className={`h-1 w-12 rounded-full transition-all ${step >= i ? 'bg-blue-600' : 'bg-[#222]'}`}></div>)}
             </div>
 
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-black">{step === 1 ? "Partner Details" : step === 2 ? "Qualifications" : "Admin Approval"}</h2>
+                <h2 className="text-2xl font-black">{step === 1 ? "Partner Details" : step === 2 ? "Service Sector" : "Admin Approval"}</h2>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Step {step} of 3</p>
             </div>
 
             {error && <div className="bg-red-900/20 text-red-500 p-3 rounded-xl text-center text-sm font-bold mb-6 border border-red-900/50">{error}</div>}
 
-            {/* STEP 1: Details */}
+            {/* STEP 1: Basic Info */}
             {step === 1 && (
                 <div className="space-y-4 animate-in slide-in-from-right">
                     <div className="grid grid-cols-2 gap-4">
@@ -82,44 +95,72 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
                 </div>
             )}
 
-            {/* STEP 2: Identity & Certificates */}
+            {/* STEP 2: Sector & Docs */}
             {step === 2 && (
-                <div className="space-y-4 animate-in slide-in-from-right">
-                    {/* Selfie Section */}
-                    <div className="bg-[#111] h-32 rounded-xl border border-[#222] flex items-center justify-center overflow-hidden relative">
-                        {isCameraOpen ? <video ref={videoRef} autoPlay className="w-full h-full object-cover"/> : capturedImage ? <img src={capturedImage} className="w-full h-full object-cover"/> : <Camera size={24} className="text-gray-600"/>}
-                        {!isCameraOpen && !capturedImage && <button onClick={startCamera} className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-400 hover:text-white">Tap to take selfie</button>}
-                        {isCameraOpen && <button onClick={capturePhoto} className="absolute bottom-2 bg-white text-black px-4 py-1 text-xs rounded-full font-bold">Capture</button>}
-                        <canvas ref={canvasRef} className="hidden"/>
+                <div className="space-y-6 animate-in slide-in-from-right">
+                    
+                    {/* Sector Selection Grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <button onClick={() => setFormData({...formData, serviceSector: 'transport'})} className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition ${formData.serviceSector === 'transport' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-[#111] border-[#222] text-gray-500 hover:bg-[#1a1a1a]'}`}>
+                            <Car size={24}/>
+                            <span className="text-[10px] font-bold uppercase">Transport</span>
+                        </button>
+                        <button onClick={() => setFormData({...formData, serviceSector: 'medical'})} className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition ${formData.serviceSector === 'medical' ? 'bg-green-600 border-green-400 text-white' : 'bg-[#111] border-[#222] text-gray-500 hover:bg-[#1a1a1a]'}`}>
+                            <Stethoscope size={24}/>
+                            <span className="text-[10px] font-bold uppercase">Medical</span>
+                        </button>
+                        <button onClick={() => setFormData({...formData, serviceSector: 'companionship'})} className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition ${formData.serviceSector === 'companionship' ? 'bg-purple-600 border-purple-400 text-white' : 'bg-[#111] border-[#222] text-gray-500 hover:bg-[#1a1a1a]'}`}>
+                            <HeartHandshake size={24}/>
+                            <span className="text-[10px] font-bold uppercase">Helper</span>
+                        </button>
                     </div>
 
-                    {/* ID Upload */}
-                    <div className="bg-[#111] p-3 rounded-xl border border-[#222] flex items-center gap-4 cursor-pointer hover:border-blue-600 transition" onClick={() => document.getElementById('doc').click()}>
-                        <div className="p-2 bg-[#222] rounded-lg text-blue-500"><FileText size={18}/></div>
-                        <div><p className="font-bold text-sm">Govt ID Proof</p><p className="text-[10px] text-gray-500">{idFile ? idFile.name : "Required for everyone"}</p></div>
-                        <input id="doc" type="file" className="hidden" onChange={e => setIdFile(e.target.files[0])}/>
-                    </div>
-
-                    {/* NEW: Geriatric Training Section */}
-                    <div className={`p-4 rounded-xl border transition-all ${isGeriatric ? 'bg-green-900/10 border-green-500/30' : 'bg-[#111] border-[#222]'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                                <Stethoscope size={18} className={isGeriatric ? "text-green-500" : "text-gray-500"}/>
-                                <span className="font-bold text-sm">Geriatric Trained?</span>
-                            </div>
-                            <input type="checkbox" className="w-5 h-5 accent-green-500" checked={isGeriatric} onChange={(e) => setIsGeriatric(e.target.checked)} />
-                        </div>
+                    {/* Dynamic Inputs based on Sector */}
+                    <div className="bg-[#111] p-5 rounded-2xl border border-[#222] space-y-4">
+                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Required Documents</h4>
                         
-                        {isGeriatric && (
-                            <div className="mt-3 bg-black/50 p-3 rounded-lg border border-dashed border-green-500/30 flex items-center justify-between cursor-pointer hover:bg-black" onClick={() => document.getElementById('cert').click()}>
-                                <span className="text-xs text-green-400">{certFile ? certFile.name : "+ Upload Training Certificate"}</span>
-                                <Upload size={14} className="text-green-500"/>
-                                <input id="cert" type="file" className="hidden" onChange={e => setCertFile(e.target.files[0])}/>
+                        {/* Common: Govt ID */}
+                        <div className="flex items-center justify-between p-3 bg-[#0a0a0a] rounded-xl border border-[#222] cursor-pointer hover:border-blue-500 transition" onClick={() => document.getElementById('govtId').click()}>
+                            <div className="flex items-center gap-3">
+                                <Shield className="text-blue-500" size={18}/>
+                                <span className="text-sm font-medium text-gray-300">Government ID (Aadhaar)</span>
+                            </div>
+                            <span className="text-xs text-blue-400">{govtIdFile ? "Uploaded" : "Upload"}</span>
+                            <input id="govtId" type="file" hidden onChange={e => setGovtIdFile(e.target.files[0])}/>
+                        </div>
+
+                        {/* Transport Specific */}
+                        {formData.serviceSector === 'transport' && (
+                            <>
+                                <div className="flex items-center justify-between p-3 bg-[#0a0a0a] rounded-xl border border-[#222] cursor-pointer hover:border-blue-500 transition" onClick={() => document.getElementById('license').click()}>
+                                    <div className="flex items-center gap-3">
+                                        <FileText className="text-orange-500" size={18}/>
+                                        <span className="text-sm font-medium text-gray-300">Driving License</span>
+                                    </div>
+                                    <span className="text-xs text-orange-400">{licenseFile ? "Uploaded" : "Upload"}</span>
+                                    <input id="license" type="file" hidden onChange={e => setLicenseFile(e.target.files[0])}/>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <input placeholder="Vehicle Model (e.g. Swift)" className="bg-[#0a0a0a] border border-[#222] p-3 rounded-xl text-sm focus:border-blue-500 outline-none" onChange={e => setFormData({...formData, vehicleModel: e.target.value})}/>
+                                    <input placeholder="Plate No. (KL-01...)" className="bg-[#0a0a0a] border border-[#222] p-3 rounded-xl text-sm focus:border-blue-500 outline-none" onChange={e => setFormData({...formData, vehicleNumber: e.target.value})}/>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Medical Specific */}
+                        {formData.serviceSector === 'medical' && (
+                            <div className="flex items-center justify-between p-3 bg-[#0a0a0a] rounded-xl border border-[#222] cursor-pointer hover:border-green-500 transition" onClick={() => document.getElementById('medCert').click()}>
+                                <div className="flex items-center gap-3">
+                                    <Briefcase className="text-green-500" size={18}/>
+                                    <span className="text-sm font-medium text-gray-300">Nursing Certificate</span>
+                                </div>
+                                <span className="text-xs text-green-400">{medicalFile ? "Uploaded" : "Upload"}</span>
+                                <input id="medCert" type="file" hidden onChange={e => setMedicalFile(e.target.files[0])}/>
                             </div>
                         )}
                     </div>
 
-                    <div className="flex gap-3 mt-4">
+                    <div className="flex gap-3">
                         <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl font-bold bg-[#111] text-gray-400 hover:text-white">Back</button>
                         <button onClick={() => setStep(3)} className="flex-1 bg-white text-black font-bold py-4 rounded-xl hover:bg-gray-200">Verify Identity</button>
                     </div>
@@ -129,24 +170,24 @@ const VolunteerSignup = ({ onRegister, onBack }) => {
             {/* STEP 3: Admin Approval */}
             {step === 3 && (
                 <div className="space-y-6 animate-in slide-in-from-right text-center">
-                    <div className="bg-yellow-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto border border-yellow-500/20"><Shield size={40} className="text-yellow-500"/></div>
+                    <div className="bg-yellow-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto border border-yellow-500/20 animate-pulse"><Shield size={40} className="text-yellow-500"/></div>
                     <div>
-                        <h3 className="text-xl font-bold">Verification Call Required</h3>
-                        <p className="text-gray-500 text-sm mt-2">
-                            Join the call. If you have training, please show your original certificate to the Admin.
+                        <h3 className="text-xl font-bold">Final Verification</h3>
+                        <p className="text-gray-500 text-sm mt-2 max-w-xs mx-auto">
+                            Please join the video call with our admin to verify your <b>{formData.serviceSector}</b> credentials.
                         </p>
                     </div>
                     
                     <a href="https://meet.google.com/fsv-htsz-srx" target="_blank" className="flex items-center justify-center gap-3 w-full bg-[#111] hover:bg-[#222] text-blue-500 font-bold py-4 rounded-xl border border-blue-900/30 transition">
-                        <Video size={20}/> Join Admin Call
+                        <Video size={20}/> Join Interview
                     </a>
 
                     <div className="relative">
                         <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"/>
-                        <input placeholder="Enter 6-Digit Code" className="w-full bg-[#111] border border-[#222] rounded-xl py-4 pl-12 pr-4 text-center font-mono text-xl tracking-widest focus:border-green-500 outline-none transition" onChange={e => setFormData({...formData, adminCode: e.target.value})} />
+                        <input placeholder="Enter Admin Code" className="w-full bg-[#111] border border-[#222] rounded-xl py-4 pl-12 pr-4 text-center font-mono text-xl tracking-widest focus:border-green-500 outline-none transition" onChange={e => setFormData({...formData, adminCode: e.target.value})} />
                     </div>
 
-                    <button onClick={handleSubmit} disabled={loading} className="w-full bg-green-600 text-black font-bold py-4 rounded-xl hover:bg-green-500 transition">
+                    <button onClick={handleSubmit} disabled={loading} className="w-full bg-green-600 text-black font-bold py-4 rounded-xl hover:bg-green-500 transition shadow-[0_0_20px_rgba(22,163,74,0.3)]">
                         {loading ? <Loader2 className="animate-spin mx-auto"/> : "Complete Registration"}
                     </button>
                 </div>

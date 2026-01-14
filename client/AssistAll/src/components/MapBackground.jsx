@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Import marker images directly to avoid 404s
+// Import marker images directly to avoid missing asset errors
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
@@ -30,7 +30,7 @@ const MapBackground = ({ activeRequest }) => {
   const userPos = activeRequest?.location ? [activeRequest.location.lat, activeRequest.location.lng] : defaultPos;
   const [volPos, setVolPos] = useState([9.5940, 76.5240]); 
 
-  // --- SAFE ICON DEFINITIONS (Created inside component to prevent crash) ---
+  // ✅ FIX: Define icons inside the component using useMemo to prevent load crashes
   const icons = useMemo(() => ({
       user: new L.Icon({
           iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
@@ -54,17 +54,21 @@ const MapBackground = ({ activeRequest }) => {
       })
   }), []);
 
-  // Animation Logic
+  // Animation Logic: Move Volunteer to User
   useEffect(() => {
       if (activeRequest && (activeRequest.status === 'accepted' || activeRequest.status === 'in_progress')) {
           const interval = setInterval(() => {
               setVolPos(prev => {
                   const latDiff = userPos[0] - prev[0];
                   const lngDiff = userPos[1] - prev[1];
+                  
+                  // Stop if close enough
                   if (Math.abs(latDiff) < 0.0001 && Math.abs(lngDiff) < 0.0001) return prev;
+
+                  // Move 5% closer every tick
                   return [prev[0] + latDiff * 0.05, prev[1] + lngDiff * 0.05];
               });
-          }, 500);
+          }, 500); // Update every 500ms
           return () => clearInterval(interval);
       }
   }, [activeRequest, userPos]);
@@ -79,6 +83,7 @@ const MapBackground = ({ activeRequest }) => {
         attributionControl={false}
       >
         <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+        
         <MapController location={userPos} />
 
         <Marker position={userPos} icon={icons.user}>
@@ -90,9 +95,11 @@ const MapBackground = ({ activeRequest }) => {
                 <Marker position={volPos} icon={activeRequest.status === 'in_progress' ? icons.car : icons.volunteer}>
                     <Popup>{activeRequest.volunteerName || "Volunteer"}</Popup>
                 </Marker>
+                {/* Route Line */}
                 <Polyline positions={[volPos, userPos]} color="blue" dashArray="10, 10" opacity={0.5} />
             </>
         )}
+
       </MapContainer>
     </div>
   );

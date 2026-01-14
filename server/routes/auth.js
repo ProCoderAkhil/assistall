@@ -7,7 +7,10 @@ const AccessCode = require('../models/AccessCode');
 
 // REGISTER
 router.post('/register', async (req, res) => {
-  const { name, email, password, role, govtId, address, phone, adminCode, isGeriatricTrained, trainingCertificate } = req.body;
+  const { 
+      name, email, password, role, govtId, address, phone, adminCode,
+      serviceSector, drivingLicense, medicalCertificate, vehicleDetails
+  } = req.body;
 
   try {
     let user = await User.findOne({ email });
@@ -15,6 +18,7 @@ router.post('/register', async (req, res) => {
 
     let isVerified = false;
     
+    // Volunteer Verification Logic
     if (role === 'volunteer') {
         if (!adminCode) return res.status(400).json({ message: 'Verification Code Required' });
         const validCode = await AccessCode.findOne({ code: adminCode });
@@ -28,18 +32,35 @@ router.post('/register', async (req, res) => {
     user = new User({
       name, email, password: hashedPassword, role,
       govtId, address, phone,
+      
+      // New Fields
+      serviceSector: serviceSector || 'general',
+      drivingLicense: drivingLicense || '',
+      medicalCertificate: medicalCertificate || '',
+      vehicleDetails: vehicleDetails || {},
+
       isVerified: role === 'user' ? true : isVerified, 
-      verificationStatus: role === 'volunteer' ? 'pending' : 'approved',
-      isGeriatricTrained: isGeriatricTrained || false,
-      trainingCertificate: trainingCertificate || ''
+      verificationStatus: role === 'volunteer' ? 'pending' : 'approved'
     });
 
     await user.save();
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-    res.status(201).json({ token, user: { _id: user._id, name: user.name, email: user.email, role: user.role, isVerified: user.isVerified } });
+    res.status(201).json({ 
+        token, 
+        user: { 
+            _id: user._id, 
+            name: user.name, 
+            email: user.email, 
+            role: user.role, 
+            isVerified: user.isVerified 
+        } 
+    });
 
-  } catch (err) { res.status(500).json({ message: 'Server Error' }); }
+  } catch (err) { 
+      console.error(err);
+      res.status(500).json({ message: 'Server Error' }); 
+  }
 });
 
 // LOGIN
@@ -61,7 +82,7 @@ router.post('/login', async (req, res) => {
     } catch (err) { res.status(500).json({ message: 'Server Error' }); }
 });
 
-// --- NEW: GET PUBLIC USER PROFILE (For User Dashboard) ---
+// PUBLIC PROFILE
 router.get('/user/:id', async (req, res) => {
     try {
         const user = await User.findById(req.params.id).select('-password -adminCode');
