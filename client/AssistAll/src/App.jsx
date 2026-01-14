@@ -26,7 +26,7 @@ const DEPLOYED_API_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
 
-// --- ERROR BOUNDARY ---
+// --- ERROR BOUNDARY COMPONENT ---
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError(error) { return { hasError: true }; }
