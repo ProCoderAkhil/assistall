@@ -125,7 +125,6 @@ const RideInProgress = ({ requestData }) => {
     );
 };
 
-// --- UPDATED RATE AND TIP COMPONENT ---
 const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
     const [rating, setRating] = useState(5);
     const [feedback, setFeedback] = useState('');
@@ -141,11 +140,21 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ rating, review: feedback, tip: selectedTip, paymentMethod: method })
             });
-            alert("Feedback Submitted!"); // Simple alert for fallback
+            alert("Thank you! Feedback Submitted.");
             onSubmit(); 
         } catch (err) { onSubmit(); } 
         finally { setLoading(false); }
     };
+
+    const handleCashPayment = () => {
+        setLoading(true);
+        alert(`Please give ₹${selectedTip} cash to the volunteer.`);
+        setTimeout(() => { handleFinalSubmit('cash'); }, 2000);
+    };
+
+    const handleOnlinePayment = () => { handleFinalSubmit('online'); };
+
+    const submitReviewOnly = () => { handleFinalSubmit('none'); };
 
     return (
         <div className="fixed inset-0 z-[6000] bg-white flex flex-col items-center justify-center p-6 animate-in zoom-in font-sans">
@@ -183,13 +192,11 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
                 </div>
             )}
             
-            <button 
-                onClick={() => handleFinalSubmit(selectedTip > 0 ? paymentMode : 'none')} 
-                disabled={loading} 
-                className={`w-full max-w-sm text-white font-bold py-4 rounded-2xl mb-3 transition flex items-center justify-center shadow-lg active:scale-95 ${paymentMode === 'online' && selectedTip > 0 ? 'bg-[#3395ff]' : selectedTip > 0 ? 'bg-green-600' : 'bg-black'}`}
-            >
-                {loading ? <Loader2 className="animate-spin"/> : selectedTip > 0 ? (paymentMode === 'online' ? `Pay ₹${selectedTip}` : `Confirm Cash Payment`) : "Submit Review"}
-            </button>
+            {selectedTip > 0 ? (
+                <button onClick={paymentMode === 'online' ? handleOnlinePayment : handleCashPayment} disabled={loading} className={`w-full max-w-sm text-white font-bold py-4 rounded-2xl mb-3 transition flex items-center justify-center shadow-lg active:scale-95 ${paymentMode === 'online' ? 'bg-[#3395ff]' : 'bg-green-600'}`}>{loading ? <Loader2 className="animate-spin"/> : paymentMode === 'online' ? `Pay ₹${selectedTip}` : `Confirm Cash Payment`}</button>
+            ) : (
+                <button onClick={submitReviewOnly} disabled={loading} className="w-full max-w-sm bg-black text-white font-bold py-4 rounded-2xl mb-3 hover:bg-gray-800 shadow-lg active:scale-95 flex items-center justify-center">{loading ? <Loader2 className="animate-spin"/> : "Submit Review"}</button>
+            )}
             
             <button onClick={onSkip} className="text-gray-400 font-bold text-sm">Skip Feedback</button>
         </div>
@@ -197,7 +204,7 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
 };
 
 // ==========================================
-// 2. MAIN CONTROLLER
+// 2. MAIN CONTROLLER (FIXED)
 // ==========================================
 
 const UserDashboard = () => {
@@ -205,16 +212,11 @@ const UserDashboard = () => {
     const [activeRide, setActiveRide] = useState(null);
     const [volunteerDetails, setVolunteerDetails] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
-    const pollRef = useRef(null);
+    
+    // Tracks the current ride ID we are polling for
+    const [rideIdToPoll, setRideIdToPoll] = useState(() => localStorage.getItem('activeRideId'));
 
-    // Initial Load
-    useEffect(() => {
-        const savedId = localStorage.getItem('activeRideId');
-        if (savedId) {
-            startPolling(savedId);
-        }
-    }, []);
-
+    // --- FETCH PROFILE ---
     const fetchVolunteerDetails = async (volunteerId) => {
         if (!volunteerId) return;
         try {
@@ -223,6 +225,7 @@ const UserDashboard = () => {
         } catch (e) {}
     };
 
+    // --- INITIAL REQUEST ---
     const handleRequest = async (requestDetails) => {
         try {
             const user = JSON.parse(localStorage.getItem('user'));
@@ -241,61 +244,72 @@ const UserDashboard = () => {
             if (res.ok) {
                 const data = await res.json();
                 localStorage.setItem('activeRideId', data._id);
+                setRideIdToPoll(data._id); // Start Polling
                 setViewState('searching');
-                startPolling(data._id);
             }
         } catch (e) { alert("Connection Error"); }
     };
 
-    const startPolling = (id) => {
-        if (pollRef.current) clearTimeout(pollRef.current);
-        
-        const poll = async () => {
+    // --- ROBUST POLLING EFFECT ---
+    useEffect(() => {
+        if (!rideIdToPoll) return;
+
+        const pollInterval = setInterval(async () => {
             try {
-                // Polling the specific request endpoint is more efficient than getting all requests
-                // But keeping existing logic to avoid backend refactor
+                // Fetch ALL data to find our ride
                 const res = await fetch(`${API_BASE}/api/requests?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
-                    // Assuming data is an array, we find our specific request
-                    const myRide = data.find(r => r._id === id);
-                    
+                    const myRide = data.find(r => r._id === rideIdToPoll);
+
                     if (myRide) {
                         setActiveRide(myRide);
+
+                        // --- STATE TRANSITIONS ---
                         
-                        // Status Logic
+                        // 1. COMPLETED: High Priority Check
+                        if (myRide.status === 'completed') {
+                            setViewState('completed');
+                            localStorage.removeItem('activeRideId');
+                            setRideIdToPoll(null); // STOP POLLING immediately
+                            return;
+                        }
+
+                        // 2. ACCEPTED
                         if (myRide.status === 'accepted') {
                             setViewState('active_ride');
-                            if (!volunteerDetails) fetchVolunteerDetails(myRide.volunteerId);
+                            // Only fetch volunteer details once
+                            setVolunteerDetails(prev => {
+                                if(!prev) fetchVolunteerDetails(myRide.volunteerId);
+                                return prev;
+                            });
                         } 
+                        
+                        // 3. IN PROGRESS
                         else if (myRide.status === 'in_progress') {
                             setViewState('active_ride');
                         }
-                        else if (myRide.status === 'completed') {
-                            setViewState('completed'); // ✅ Forces the RateAndTip view
-                            localStorage.removeItem('activeRideId');
-                            return; // Stop Polling
-                        } else {
-                            setViewState('searching');
-                        }
                     }
                 }
-            } catch (e) {}
-            pollRef.current = setTimeout(poll, 3000);
-        };
-        poll();
-    };
+            } catch (e) { console.error("Polling Error", e); }
+        }, 3000);
 
+        return () => clearInterval(pollInterval);
+    }, [rideIdToPoll]); // Re-run if ID changes
+
+    // --- RESET HANDLER ---
     const handleReset = () => {
-        if (pollRef.current) clearTimeout(pollRef.current);
         localStorage.removeItem('activeRideId');
+        setRideIdToPoll(null);
         setActiveRide(null);
         setViewState('menu');
     };
 
+    // --- RENDER ---
     return (
         <div className="h-screen bg-neutral-100 text-black font-sans flex flex-col relative overflow-hidden">
-            {/* Map Background (Hidden during feedback) */}
+            
+            {/* Map (Hidden ONLY if Completed) */}
             {viewState !== 'completed' && (
                 <div className="absolute inset-0 z-0">
                     <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src="https://www.openstreetmap.org/export/embed.html?bbox=76.51%2C9.58%2C76.54%2C9.60&amp;layer=mapnik&amp;marker=9.59%2C76.52" style={{ filter: 'grayscale(100%) invert(90%) contrast(120%)' }}></iframe>
@@ -314,10 +328,15 @@ const UserDashboard = () => {
 
             {activeRide && viewState !== 'completed' && <StatusBanner status={activeRide.status} />}
 
-            {/* State-Based Views */}
+            {/* --- VIEW SWITCHER --- */}
+            
+            {/* 1. Menu */}
             {viewState === 'menu' && <ServiceSelector onFindClick={handleRequest} />}
+            
+            {/* 2. Searching */}
             {viewState === 'searching' && <FindingVolunteer onCancel={handleReset} />}
 
+            {/* 3. Active Ride (Accepted) */}
             {viewState === 'active_ride' && activeRide?.status === 'accepted' && (
                 <>
                     <ArrivingView rideData={activeRide} onViewProfile={() => setShowProfile(true)} />
@@ -325,10 +344,15 @@ const UserDashboard = () => {
                 </>
             )}
 
-            {viewState === 'active_ride' && activeRide?.status === 'in_progress' && <RideInProgress requestData={activeRide} />}
+            {/* 4. Active Ride (In Progress) */}
+            {viewState === 'active_ride' && activeRide?.status === 'in_progress' && (
+                <RideInProgress requestData={activeRide} />
+            )}
             
-            {/* ✅ Feedback Screen */}
-            {viewState === 'completed' && <RateAndTip requestData={activeRide} onSkip={handleReset} onSubmit={handleReset} />}
+            {/* 5. Completed (Rate & Tip) - Exclusive View */}
+            {viewState === 'completed' && (
+                <RateAndTip requestData={activeRide} onSkip={handleReset} onSubmit={handleReset} />
+            )}
         </div>
     );
 };
