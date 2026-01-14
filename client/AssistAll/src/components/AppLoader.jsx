@@ -5,7 +5,7 @@ const AppLoader = () => {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   
-  // ✅ FIX: Using 'Cpu' icon which is imported. No custom icon definitions causing crashes.
+  // ✅ FIX: Use 'Cpu' icon instead of the undefined 'Power' variable
   const loadingSteps = [
     { text: "INITIALIZING CORE SYSTEMS...", icon: Cpu },
     { text: "ESTABLISHING SECURE UPLINK...", icon: Lock },
@@ -38,13 +38,10 @@ const AppLoader = () => {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-[#020202] flex flex-col items-center justify-center font-sans overflow-hidden text-white selection:bg-green-500/30">
-      
-      {/* Background */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,0,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,black,transparent)] pointer-events-none"></div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-green-500/5 rounded-full blur-[120px] animate-pulse"></div>
 
       <div className="relative z-10 flex flex-col items-center">
-        {/* Animation */}
         <div className="relative w-48 h-48 mb-12 flex items-center justify-center">
             <div className="absolute inset-0 border border-green-500/20 rounded-full animate-[spin_10s_linear_infinite]"></div>
             <div className="absolute inset-0 border-t border-green-500/60 rounded-full animate-[spin_10s_linear_infinite] shadow-[0_0_20px_rgba(34,197,94,0.2)]"></div>
@@ -58,7 +55,6 @@ const AppLoader = () => {
             </div>
         </div>
 
-        {/* Text */}
         <div className="w-80 text-center space-y-6">
             <h1 className="text-3xl font-black tracking-tighter text-white flex items-center justify-center gap-2">
                 ASSIST<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">ALL</span>

@@ -20,7 +20,7 @@ const MapBackground = ({ activeRequest }) => {
   const userPos = activeRequest?.location ? [activeRequest.location.lat, activeRequest.location.lng] : defaultPos;
   const [volPos, setVolPos] = useState([9.5940, 76.5240]); 
 
-  // ✅ FIX: Icons defined INSIDE component using useMemo to prevent load-time crashes
+  // ✅ FIX: Icons defined INSIDE component using useMemo to avoid startup crashes
   const icons = useMemo(() => ({
       user: new L.Icon({
           iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',

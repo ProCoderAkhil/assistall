@@ -26,7 +26,7 @@ const DEPLOYED_API_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
 
-// --- ERROR BOUNDARY COMPONENT ---
+// --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError(error) { return { hasError: true }; }
@@ -100,6 +100,7 @@ function App() {
               const data = await res.json();
               const myRequest = data.find(r => r._id === activeRequestId);
               if (myRequest) {
+                 // Check if status actually changed to prevent loop
                  if (myRequest.status === 'accepted' && step !== 'found') {
                     setAcceptedRequestData(myRequest); setStep('found'); showToast(`Volunteer Found!`, 'success');
                  } else if (myRequest.status === 'in_progress' && step !== 'in_progress') {
