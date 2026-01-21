@@ -18,14 +18,14 @@ router.post('/generate-code', async (req, res) => {
     try {
         const { userId, code: clientCode } = req.body;
         
-        // Use provided code (if fallback generated on client) or generate new one
+        // Use provided code (if generated on client) or generate a new one
         const code = clientCode || Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Save this code to the user's record
+        // Save this code to the user's record so they can verify it
         const updatedUser = await User.findByIdAndUpdate(
             userId, 
             { interviewCode: code }, 
-            { new: true } // Return the updated document
+            { new: true }
         );
 
         if (!updatedUser) {
@@ -39,7 +39,7 @@ router.post('/generate-code', async (req, res) => {
     }
 });
 
-// --- 3. FORCE APPROVE USER (The Bypass) ---
+// --- 3. FORCE APPROVE USER (The Bypass Button) ---
 router.put('/verify/:id', async (req, res) => {
     try {
         const { status } = req.body; // Expect 'approved' or 'rejected'

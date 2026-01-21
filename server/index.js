@@ -23,7 +23,7 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', require('./routes/auth'));
 
 // 2. Admin Panel (Volunteer Management, OTP Generation, Force Verify)
-// ✅ CRITICAL: This must be active for the Admin Panel to work
+// ✅ CRITICAL: This enables the Admin Panel features
 app.use('/api/admin', require('./routes/admin'));
 
 // 3. Service Requests (Rides, Help, SOS)
