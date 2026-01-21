@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Star, CheckCircle, CreditCard, Loader2, Banknote, ShieldCheck, MessageSquare } from 'lucide-react';
+import { useToast } from './ToastContext'; // ✅ Import Context
 
-const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
+const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
+  const { addToast } = useToast(); // ✅ Use Global Toast
   const [rating, setRating] = useState(5);
   const [feedback, setFeedback] = useState('');
   const [selectedTip, setSelectedTip] = useState(0);
@@ -12,11 +14,111 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
       ? 'http://localhost:5000' 
       : 'https://assistall-server.onrender.com';
 
-  const handleFinalSubmit = async (method) => {
+  // --- 1. HELPER: Load Razorpay Script Dynamically ---
+  const loadRazorpayScript = () => {
+      return new Promise((resolve) => {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.onload = () => resolve(true);
+          script.onerror = () => resolve(false);
+          document.body.appendChild(script);
+      });
+  };
+
+  // --- 2. PAYMENT: Handle Online Payment ---
+  const handleOnlinePayment = async () => {
       setLoading(true);
+      
+      const res = await loadRazorpayScript();
+      if (!res) {
+          addToast('Razorpay SDK failed to load. Check internet.', 'error');
+          setLoading(false);
+          return;
+      }
+
+      try {
+          // A. Create Order on Backend
+          const orderRes = await fetch(`${DEPLOYED_API_URL}/api/payment/orders`, {
+              method: 'POST',
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ amount: selectedTip })
+          });
+          
+          if (!orderRes.ok) throw new Error("Failed to create order");
+          const orderData = await orderRes.json();
+
+          // B. Configure Razorpay Options
+          const options = {
+              key: "rzp_test_S44Rgy9G3Yrika",
+              amount: orderData.amount,
+              currency: orderData.currency,
+              name: "AssistAll Tip",
+              description: `Tip for ${requestData?.volunteerName}`,
+              order_id: orderData.id,
+              handler: async function (response) {
+                  // C. Verify Payment on Backend
+                  try {
+                      const verifyRes = await fetch(`${DEPLOYED_API_URL}/api/payment/verify`, {
+                          method: 'POST',
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                              razorpay_order_id: response.razorpay_order_id,
+                              razorpay_payment_id: response.razorpay_payment_id,
+                              razorpay_signature: response.razorpay_signature,
+                          }),
+                      });
+                      
+                      const verifyData = await verifyRes.json();
+                      if (verifyData.status === 'success') {
+                          // D. Success! Submit Review
+                          handleFinalSubmit('online');
+                      } else {
+                          addToast("Payment Verification Failed", "error");
+                          setLoading(false);
+                      }
+                  } catch (e) {
+                      addToast("Server Error during verification", "error");
+                      setLoading(false);
+                  }
+              },
+              theme: { color: "#16a34a" },
+              modal: {
+                  ondismiss: function() {
+                      setLoading(false);
+                  }
+              }
+          };
+
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+      } catch (err) {
+          console.error(err);
+          addToast("Error initiating payment", "error");
+          setLoading(false);
+      }
+  };
+
+  const handleCashPayment = () => {
+      setLoading(true);
+      addToast(`Please give ₹${selectedTip} cash to the volunteer.`, "info");
+      
+      // Simulate delay for user to read toast
+      setTimeout(() => {
+          handleFinalSubmit('cash');
+      }, 2500);
+  };
+
+  const submitReviewOnly = () => {
+      handleFinalSubmit('none');
+  };
+
+  const handleFinalSubmit = async (method) => {
+      // If called directly (no payment), ensure loading is set
+      if (!loading) setLoading(true);
+
       try {
         // Send rating and review to backend
-        await fetch(`${DEPLOYED_API_URL}/api/requests/${requestData._id}/rate`, {
+        await fetch(`${DEPLOYED_API_URL}/api/requests/${requestData._id}/review`, {
             method: 'PUT',
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
@@ -27,41 +129,20 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
             })
         });
 
-        if (showToast) showToast("Thank you for your feedback!", "success");
-        onSubmit(); // Close modal / Go to next step
+        addToast("Thank you for your feedback!", "success");
+        onSubmit(); 
       } catch (err) {
         console.error("Review Error:", err);
-        if (showToast) showToast("Failed to submit review", "error");
-        onSubmit(); // Still close even if error, to unblock user
+        addToast("Failed to submit review", "error");
+        onSubmit(); 
       } finally {
         setLoading(false);
       }
   };
 
-  const handleCashPayment = () => {
-      setLoading(true);
-      if (showToast) showToast(`Please give ₹${selectedTip} cash to the volunteer.`, "info");
-      
-      // Simulate delay for user to read toast
-      setTimeout(() => {
-          handleFinalSubmit('cash');
-      }, 2500);
-  };
-
-  const handleOnlinePayment = () => {
-      // Placeholder for Payment Gateway integration
-      alert(`Opening Payment Gateway for ₹${selectedTip}...`); 
-      handleFinalSubmit('online');
-  };
-
-  const submitReviewOnly = () => {
-      handleFinalSubmit('none');
-  };
-
   return (
     <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] z-[3000] p-6 pb-12 animate-in slide-in-from-bottom duration-500 font-sans border-t border-gray-100">
       
-      {/* Header */}
       <div className="text-center mb-6">
           <div className="mx-auto bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4 border-4 border-green-50 animate-bounce">
               <CheckCircle size={32} className="text-green-600" />
@@ -70,7 +151,6 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
           <p className="text-gray-500 font-medium">How was {requestData?.volunteerName}?</p>
       </div>
 
-      {/* Star Rating */}
       <div className="flex justify-center gap-3 mb-6">
           {[1, 2, 3, 4, 5].map((star) => (
               <Star 
@@ -82,7 +162,6 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
           ))}
       </div>
 
-      {/* Feedback Text Area */}
       <div className="mb-6 relative">
           <MessageSquare className="absolute left-4 top-4 text-gray-400" size={18} />
           <textarea 
@@ -94,7 +173,6 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
           />
       </div>
 
-      {/* Tip Selection */}
       <p className="font-bold text-gray-400 mb-3 text-center text-xs uppercase tracking-widest">Add a Tip</p>
       <div className="grid grid-cols-4 gap-3 mb-6">
           {[0, 20, 50, 100].map((amt) => (
@@ -108,7 +186,6 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
           ))}
       </div>
 
-      {/* Payment Method Selector (Only if Tip > 0) */}
       {selectedTip > 0 && (
           <div className="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100 animate-in fade-in zoom-in">
               <p className="text-[10px] font-black text-blue-600 uppercase mb-3 flex items-center gap-1">
@@ -127,7 +204,6 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
           </div>
       )}
 
-      {/* Submit Button */}
       {selectedTip > 0 ? (
           <button 
               onClick={paymentMode === 'online' ? handleOnlinePayment : handleCashPayment} 

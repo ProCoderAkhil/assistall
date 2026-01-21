@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-    Menu, Bell, CheckCircle, Navigation, Star, Phone, Shield, User, Share2, 
-    MessageSquare, ChevronUp, Loader2, X, Stethoscope, FileText, MapPin, 
+    Menu, Bell, CheckCircle, Navigation, Star, Phone, Shield, Share2, 
+    MessageSquare, Loader2, X, Stethoscope, MapPin, 
     CreditCard, Banknote, ShieldCheck, AlertTriangle 
 } from 'lucide-react';
 import ServiceSelector from './ServiceSelector';
+import { useToast } from './ToastContext'; // ✅ Import the Global Toast Hook
 
+// ✅ Dynamic API URL
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://assistall-server.onrender.com';
 
 // ==========================================
@@ -13,11 +15,10 @@ const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:50
 // ==========================================
 
 const StatusBanner = ({ status }) => {
-    if (!status || status === 'pending') return null;
+    if (!status || status === 'pending' || status === 'completed') return null;
     let bg = "bg-blue-600", text = "Updating...", icon = <Bell size={16} />;
     if (status === 'accepted') { bg = "bg-green-600"; text = "VOLUNTEER FOUND"; icon = <CheckCircle size={16} />; }
     else if (status === 'in_progress') { bg = "bg-blue-600"; text = "RIDE IN PROGRESS"; icon = <Navigation size={16} />; }
-    else if (status === 'completed') { bg = "bg-black"; text = "RIDE COMPLETED"; icon = <Star size={16} />; }
     
     return (
         <div className={`fixed top-0 left-0 right-0 ${bg} text-white px-4 py-3 z-[5000] shadow-xl animate-in slide-in-from-top flex items-center justify-center gap-3`}>
@@ -26,19 +27,42 @@ const StatusBanner = ({ status }) => {
     );
 };
 
-const FindingVolunteer = ({ onCancel }) => (
-    <div className="absolute bottom-0 left-0 right-0 z-[2000] bg-white rounded-t-3xl shadow-2xl p-8 pb-12 animate-in slide-in-from-bottom">
-        <div className="flex flex-col items-center text-center mt-4">
-            <div className="relative flex items-center justify-center mb-8">
-                <div className="absolute w-64 h-64 bg-green-500/10 rounded-full animate-ping" style={{animationDuration: '3s'}}></div>
-                <div className="bg-black p-6 rounded-full z-10 shadow-2xl relative"><Loader2 className="text-white animate-spin" size={40} /></div>
+const FindingVolunteer = ({ requestId, onCancel }) => {
+    const { addToast } = useToast(); // ✅ Use Toast
+
+    const handleCancel = async () => {
+        if (requestId) {
+            try {
+                await fetch(`${API_BASE}/api/requests/${requestId}/cancel`, {
+                    method: 'PUT',
+                    headers: { "Content-Type": "application/json" }
+                });
+                addToast("Request Cancelled", "info");
+            } catch (e) { 
+                console.error("Cancel failed", e);
+                // Even if it fails, we close the UI so user isn't stuck
+            }
+        }
+        onCancel();
+    };
+
+    return (
+        <div className="absolute bottom-0 left-0 right-0 z-[2000] bg-white rounded-t-3xl shadow-2xl p-8 pb-12 animate-in slide-in-from-bottom">
+            <div className="flex flex-col items-center text-center mt-4">
+                <div className="relative flex items-center justify-center mb-8">
+                    <div className="absolute w-64 h-64 bg-green-500/10 rounded-full animate-ping" style={{animationDuration: '3s'}}></div>
+                    <div className="bg-black p-6 rounded-full z-10 shadow-2xl relative"><Loader2 className="text-white animate-spin" size={40} /></div>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Finding Volunteers...</h3>
+                <p className="text-gray-500 text-sm max-w-xs mb-8">Broadcasting request to verified helpers.</p>
+                <button onClick={handleCancel} className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center hover:bg-red-100 text-red-600 transition shadow-md">
+                    <X size={24}/>
+                </button>
+                <p className="text-xs text-gray-400 mt-2 font-bold uppercase tracking-wider">Cancel Request</p>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Finding Volunteers...</h3>
-            <p className="text-gray-500 text-sm max-w-xs mb-8">Broadcasting request to verified helpers.</p>
-            <button onClick={onCancel} className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center hover:bg-red-100 text-red-600 transition shadow-md"><X size={24}/></button>
         </div>
-    </div>
-);
+    );
+};
 
 const VolunteerProfileModal = ({ volunteer, onClose }) => {
     if (!volunteer) return null;
@@ -116,7 +140,7 @@ const RideInProgress = ({ requestData }) => {
                 </div>
                 <div className={`transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0 hidden'}`}>
                     <div className="bg-[#1a1a1a] p-5 rounded-3xl border border-white/5 mb-6">
-                        <div className="flex items-start mb-6"><div className="w-3 h-3 bg-white rounded-full border-2 border-neutral-500 shadow mr-4 mt-1"></div><div><p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Pickup</p><p className="font-bold text-gray-200 text-sm">{requestData.pickupLocation || "Current Location"}</p></div></div>
+                        <div className="flex items-start mb-6"><div className="w-3 h-3 bg-white rounded-full border-2 border-neutral-500 shadow mr-4 mt-1"></div><div><p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Pickup</p><p className="font-bold text-gray-200 text-sm">{requestData.pickup || "Current Location"}</p></div></div>
                         <div className="flex items-start"><div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow mr-4 mt-1"></div><div><p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Destination</p><p className="font-bold text-gray-200 text-sm">{requestData.drop}</p></div></div>
                     </div>
                 </div>
@@ -125,7 +149,8 @@ const RideInProgress = ({ requestData }) => {
     );
 };
 
-const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
+const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
+    const { addToast } = useToast(); // ✅ Use Toast Hook
     const [rating, setRating] = useState(5);
     const [feedback, setFeedback] = useState('');
     const [selectedTip, setSelectedTip] = useState(0);
@@ -140,7 +165,7 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ rating, review: feedback, tip: selectedTip, paymentMethod: method })
             });
-            alert("Thank you! Feedback Submitted.");
+            addToast("Thank you! Feedback Submitted.", "success"); // ✅ Use Toast
             onSubmit(); 
         } catch (err) { onSubmit(); } 
         finally { setLoading(false); }
@@ -148,12 +173,11 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
 
     const handleCashPayment = () => {
         setLoading(true);
-        alert(`Please give ₹${selectedTip} cash to the volunteer.`);
+        addToast(`Please give ₹${selectedTip} cash to the volunteer.`, "info"); // ✅ Use Toast
         setTimeout(() => { handleFinalSubmit('cash'); }, 2000);
     };
 
     const handleOnlinePayment = () => { handleFinalSubmit('online'); };
-
     const submitReviewOnly = () => { handleFinalSubmit('none'); };
 
     return (
@@ -204,19 +228,17 @@ const RateAndTip = ({ requestData, onSkip, onSubmit, showToast }) => {
 };
 
 // ==========================================
-// 2. MAIN CONTROLLER (FIXED)
+// 2. MAIN CONTROLLER
 // ==========================================
 
 const UserDashboard = () => {
+    const { addToast } = useToast(); // ✅ Use Global Toast Hook
     const [viewState, setViewState] = useState('menu'); 
     const [activeRide, setActiveRide] = useState(null);
     const [volunteerDetails, setVolunteerDetails] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
-    
-    // Tracks the current ride ID we are polling for
     const [rideIdToPoll, setRideIdToPoll] = useState(() => localStorage.getItem('activeRideId'));
 
-    // --- FETCH PROFILE ---
     const fetchVolunteerDetails = async (volunteerId) => {
         if (!volunteerId) return;
         try {
@@ -225,7 +247,6 @@ const UserDashboard = () => {
         } catch (e) {}
     };
 
-    // --- INITIAL REQUEST ---
     const handleRequest = async (requestDetails) => {
         try {
             const user = JSON.parse(localStorage.getItem('user'));
@@ -244,19 +265,24 @@ const UserDashboard = () => {
             if (res.ok) {
                 const data = await res.json();
                 localStorage.setItem('activeRideId', data._id);
-                setRideIdToPoll(data._id); // Start Polling
+                setRideIdToPoll(data._id);
                 setViewState('searching');
+                addToast("Searching for volunteers...", "info"); // ✅ Add Toast
             }
-        } catch (e) { alert("Connection Error"); }
+        } catch (e) { addToast("Connection Error", "error"); } // ✅ Add Toast
     };
 
-    // --- ROBUST POLLING EFFECT ---
+    // --- POLLING EFFECT ---
     useEffect(() => {
-        if (!rideIdToPoll) return;
+        if (!rideIdToPoll) {
+            setViewState('menu');
+            return;
+        }
+
+        if (viewState === 'menu') setViewState('searching');
 
         const pollInterval = setInterval(async () => {
             try {
-                // Fetch ALL data to find our ride
                 const res = await fetch(`${API_BASE}/api/requests?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
@@ -265,28 +291,24 @@ const UserDashboard = () => {
                     if (myRide) {
                         setActiveRide(myRide);
 
-                        // --- STATE TRANSITIONS ---
-                        
-                        // 1. COMPLETED: High Priority Check
                         if (myRide.status === 'completed') {
                             setViewState('completed');
                             localStorage.removeItem('activeRideId');
-                            setRideIdToPoll(null); // STOP POLLING immediately
+                            setRideIdToPoll(null);
+                            addToast("Ride Completed", "success"); // ✅ Add Toast
                             return;
                         }
 
-                        // 2. ACCEPTED
                         if (myRide.status === 'accepted') {
+                            if (viewState !== 'active_ride') addToast("Volunteer Found!", "success"); // ✅ Add Toast
                             setViewState('active_ride');
-                            // Only fetch volunteer details once
                             setVolunteerDetails(prev => {
                                 if(!prev) fetchVolunteerDetails(myRide.volunteerId);
                                 return prev;
                             });
                         } 
-                        
-                        // 3. IN PROGRESS
                         else if (myRide.status === 'in_progress') {
+                            if (viewState !== 'active_ride') addToast("Ride In Progress", "info"); // ✅ Add Toast
                             setViewState('active_ride');
                         }
                     }
@@ -295,28 +317,24 @@ const UserDashboard = () => {
         }, 3000);
 
         return () => clearInterval(pollInterval);
-    }, [rideIdToPoll]); // Re-run if ID changes
+    }, [rideIdToPoll, viewState, addToast]); // ✅ Depend on addToast
 
-    // --- RESET HANDLER ---
     const handleReset = () => {
         localStorage.removeItem('activeRideId');
         setRideIdToPoll(null);
         setActiveRide(null);
         setViewState('menu');
+        addToast("Request Cancelled", "info"); // ✅ Add Toast
     };
 
-    // --- RENDER ---
     return (
         <div className="h-screen bg-neutral-100 text-black font-sans flex flex-col relative overflow-hidden">
-            
-            {/* Map (Hidden ONLY if Completed) */}
             {viewState !== 'completed' && (
                 <div className="absolute inset-0 z-0">
                     <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src="https://www.openstreetmap.org/export/embed.html?bbox=76.51%2C9.58%2C76.54%2C9.60&amp;layer=mapnik&amp;marker=9.59%2C76.52" style={{ filter: 'grayscale(100%) invert(90%) contrast(120%)' }}></iframe>
                 </div>
             )}
 
-            {/* Top Bar */}
             {viewState !== 'completed' && (
                 <div className="absolute top-0 w-full z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
                     <button onClick={handleReset} className="p-3 bg-neutral-800/80 rounded-full text-white backdrop-blur-md border border-white/10 hover:bg-neutral-700 transition"><Menu size={20}/></button>
@@ -328,15 +346,10 @@ const UserDashboard = () => {
 
             {activeRide && viewState !== 'completed' && <StatusBanner status={activeRide.status} />}
 
-            {/* --- VIEW SWITCHER --- */}
-            
-            {/* 1. Menu */}
             {viewState === 'menu' && <ServiceSelector onFindClick={handleRequest} />}
             
-            {/* 2. Searching */}
-            {viewState === 'searching' && <FindingVolunteer onCancel={handleReset} />}
+            {viewState === 'searching' && <FindingVolunteer requestId={rideIdToPoll} onCancel={handleReset} />}
 
-            {/* 3. Active Ride (Accepted) */}
             {viewState === 'active_ride' && activeRide?.status === 'accepted' && (
                 <>
                     <ArrivingView rideData={activeRide} onViewProfile={() => setShowProfile(true)} />
@@ -344,12 +357,10 @@ const UserDashboard = () => {
                 </>
             )}
 
-            {/* 4. Active Ride (In Progress) */}
             {viewState === 'active_ride' && activeRide?.status === 'in_progress' && (
                 <RideInProgress requestData={activeRide} />
             )}
             
-            {/* 5. Completed (Rate & Tip) - Exclusive View */}
             {viewState === 'completed' && (
                 <RateAndTip requestData={activeRide} onSkip={handleReset} onSubmit={handleReset} />
             )}

@@ -36,14 +36,23 @@ const FindingVolunteer = ({ requestId, onCancel }) => {
   }, []);
 
   const handleCancelRequest = async () => {
+      // ✅ SAFETY CHECK: If no ID exists yet, just close the UI
+      if (!requestId) {
+          onCancel();
+          return;
+      }
+
       try {
           await fetch(`${DEPLOYED_API_URL}/api/requests/${requestId}/cancel`, {
               method: 'PUT',
               headers: { "Content-Type": "application/json" }
           });
-          onCancel(); // Reset UI state in parent
       } catch (e) {
-          alert("Could not cancel. Check internet.");
+          console.error("Cancel failed:", e);
+          // We don't alert here because we want to let the user exit regardless of network status
+      } finally {
+          // ✅ CRITICAL FIX: Always close the window, even if API fails
+          onCancel(); 
       }
   };
 

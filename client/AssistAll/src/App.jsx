@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Bell, Shield, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom'; 
+import { Bell, Shield, Menu } from 'lucide-react';
+
+// Context
+import { ToastProvider, useToast } from './components/ToastContext'; // ✅ Import Context
 
 // Components
 import BottomNav from './components/BottomNav';
@@ -17,7 +20,6 @@ import VolunteerSignup from './components/VolunteerSignup';
 import UserSignup from './components/UserSignup'; 
 import AdminPanel from './components/AdminPanel';
 import RateAndTip from './components/RateAndTip';
-import Toast from './components/Toast';
 import LandingPage from './components/LandingPage'; 
 import AppLoader from './components/AppLoader'; 
 import SOSModal from './components/SOSModal'; 
@@ -26,7 +28,22 @@ const DEPLOYED_API_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:5000' 
     : 'https://assistall-server.onrender.com';
 
-// --- ERROR BOUNDARY ---
+// --- GUARDS ---
+const GuestGuard = ({ user, children }) => {
+  if (user) {
+    if (user.role === 'volunteer') return <Navigate to="/volunteer" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin" replace />;
+    return <Navigate to="/home" replace />;
+  }
+  return children;
+};
+
+const AuthGuard = ({ user, allowedRole, children }) => {
+  if (!user) return <Navigate to="/" replace />;
+  if (allowedRole && user.role !== allowedRole) return <Navigate to="/" replace />;
+  return children;
+};
+
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError(error) { return { hasError: true }; }
@@ -34,7 +51,6 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="h-screen bg-black flex flex-col items-center justify-center text-white p-6 text-center font-sans">
-          <div className="p-6 bg-red-900/20 rounded-full mb-6"><AlertTriangle size={48} className="text-red-500"/></div>
           <h1 className="text-2xl font-black mb-2">System Malfunction</h1>
           <button onClick={() => { localStorage.clear(); window.location.href = '/'; }} className="bg-white text-black px-8 py-3 rounded-full font-bold mt-6">Hard Reset</button>
         </div>
@@ -44,7 +60,10 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-function App() {
+// ✅ Main App Content (Must be child of ToastProvider)
+const AppContent = () => {
+  const { addToast } = useToast(); // ✅ Use Global Toast
+  
   const [user, setUser] = useState(() => {
       try { return JSON.parse(localStorage.getItem('user')); } catch (e) { return null; }
   });
@@ -54,22 +73,24 @@ function App() {
   const [activeRequestId, setActiveRequestId] = useState(() => localStorage.getItem('activeRideId'));
   const [acceptedRequestData, setAcceptedRequestData] = useState(null);
   const [showSOS, setShowSOS] = useState(false);
-  const [toast, setToast] = useState(null); 
+  
   const navigate = useNavigate();
   const location = useLocation();
+  const isFirstLoad = useRef(true); 
 
-  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
-
-  useEffect(() => { setTimeout(() => setIsLoading(false), 2000); }, []);
-
+  // --- SAFE REDIRECT ---
   useEffect(() => {
-      if (!isLoading && user && (location.pathname === '/login' || location.pathname === '/' || location.pathname === '/register')) {
-          if (user.role === 'admin') navigate('/admin');
-          else if (user.role === 'volunteer') navigate('/volunteer');
-          else navigate('/home');
-      }
-  }, [user, isLoading, location.pathname, navigate]);
+    if (isFirstLoad.current) {
+        isFirstLoad.current = false;
+        if (!user && location.pathname !== '/login' && location.pathname !== '/') {
+            window.history.replaceState(null, '', '/');
+            navigate('/', { replace: true });
+        }
+    }
+    setTimeout(() => setIsLoading(false), 2000);
+  }, []); 
 
+  // --- POLLING ---
   useEffect(() => {
     if (!activeRequestId || !user) return;
     const interval = setInterval(async () => {
@@ -77,32 +98,41 @@ function App() {
           const res = await fetch(`${DEPLOYED_API_URL}/api/requests`);
           if(res.ok) {
               const data = await res.json();
-              const myRequest = data.find(r => r._id === activeRequestId);
-              if (myRequest) {
-                 if (myRequest.status === 'accepted' && step !== 'found') {
-                    setAcceptedRequestData(myRequest); setStep('found'); showToast(`Volunteer Found!`, 'success');
-                 } else if (myRequest.status === 'in_progress' && step !== 'in_progress') {
-                   setStep('in_progress'); showToast("Ride Started", 'info');
-                 } else if (myRequest.status === 'completed' && step !== 'rating') {
-                   setStep('rating'); showToast("Ride Completed", 'success');
-                 }
+              if (Array.isArray(data)) {
+                  const myRequest = data.find(r => r._id === activeRequestId);
+                  if (myRequest) {
+                     if (myRequest.status === 'accepted' && step !== 'found') {
+                        setAcceptedRequestData(myRequest); 
+                        setStep('found'); 
+                        addToast(`Volunteer Found!`, 'success'); // ✅ Notification
+                     } else if (myRequest.status === 'in_progress' && step !== 'in_progress') {
+                        setStep('in_progress'); 
+                        addToast("Ride Started", 'info'); // ✅ Notification
+                     } else if (myRequest.status === 'completed' && step !== 'rating') {
+                        setStep('rating'); 
+                        addToast("Ride Completed", 'success'); // ✅ Notification
+                     }
+                  }
               }
           }
         } catch (err) {}
     }, 2000);
     return () => clearInterval(interval);
-  }, [activeRequestId, step, user]);
+  }, [activeRequestId, step, user, addToast]);
 
   const handleLoginSuccess = (userData, token) => {
       localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('token', token);
+      if(token) localStorage.setItem('token', token);
       setUser(userData);
-      if(userData.role === 'volunteer') navigate('/volunteer');
-      else if(userData.role === 'admin') navigate('/admin');
-      else navigate('/home');
+      addToast(`Welcome back, ${userData.name}!`, 'success');
   };
 
-  const handleLogout = () => { localStorage.clear(); setUser(null); navigate('/'); };
+  const handleLogout = () => { 
+      localStorage.clear(); 
+      setUser(null); 
+      navigate('/', { replace: true }); 
+      addToast("Logged out successfully", "info");
+  };
 
   const handleFindVolunteer = async (bookingDetails) => { 
     setStep('searching'); 
@@ -112,8 +142,7 @@ function App() {
         body: JSON.stringify({
             requesterName: user.name, requesterId: user._id, 
             type: bookingDetails.type, 
-            price: 150, // Ensure price is sent
-            // ✅ FIX: Send 'drop' instead of 'dropOffLocation' to match Schema
+            price: 150, 
             drop: bookingDetails.dropOff, 
             pickup: "Current Location",
             location: { lat: 9.5916, lng: 76.5222 },
@@ -124,24 +153,26 @@ function App() {
       const data = await res.json();
       localStorage.setItem('activeRideId', data._id);
       setActiveRequestId(data._id);
-  } catch (err) { showToast("Network Error", "error"); setStep('selecting'); }
+      addToast("Searching for nearby volunteers...", "info");
+  } catch (err) { 
+      addToast("Network Error: Could not request ride", "error"); 
+      setStep('selecting'); 
+  }
   };
 
+  if (isLoading) return <AppLoader />;
+
   return (
-    <ErrorBoundary>
-      {isLoading ? <AppLoader /> : (
-        <div className="h-screen w-full bg-[#050505] font-sans text-white relative overflow-hidden">
-          <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[5000] w-full max-w-sm px-4 pointer-events-none">
-              {toast && <div className="pointer-events-auto"><Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} /></div>}
-          </div>
+    <div className="h-screen w-full bg-[#050505] font-sans text-white relative overflow-hidden">
+      
+      <Routes>
+        <Route path="/" element={<GuestGuard user={user}><LandingPage onLogin={() => navigate('/login')} onSignup={() => navigate('/register')} onVolunteer={() => navigate('/volunteer-register')} /></GuestGuard>} />
+        <Route path="/login" element={<GuestGuard user={user}><Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} onSignupClick={() => navigate('/register')} onVolunteerClick={() => navigate('/volunteer-register')} /></GuestGuard>} />
+        <Route path="/register" element={<GuestGuard user={user}><UserSignup onRegister={handleLoginSuccess} onBack={() => navigate('/')} /></GuestGuard>} />
+        <Route path="/volunteer-register" element={<GuestGuard user={user}><VolunteerSignup onRegister={handleLoginSuccess} onBack={() => navigate('/')} /></GuestGuard>} />
 
-          <Routes>
-            <Route path="/" element={<LandingPage onGetStarted={() => navigate('/login')} onVolunteerJoin={() => navigate('/volunteer-register')} />} />
-            <Route path="/login" element={<Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} onSignupClick={() => navigate('/register')} onVolunteerClick={() => navigate('/volunteer-register')} />} />
-            <Route path="/register" element={<UserSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
-            <Route path="/volunteer-register" element={<VolunteerSignup onRegister={(u, t) => handleLoginSuccess(u, t)} onBack={() => navigate('/')} />} />
-
-            <Route path="/home" element={user && user.role === 'user' ? (
+        <Route path="/home" element={
+            <AuthGuard user={user} allowedRole="user">
                 <>
                     <div className="absolute inset-0 z-0"><MapBackground activeRequest={acceptedRequestData} /></div>
                     <div className="absolute top-0 left-0 right-0 p-4 pt-10 z-20 flex justify-between items-start pointer-events-none">
@@ -155,19 +186,36 @@ function App() {
                     {step === 'searching' && <FindingVolunteer requestId={activeRequestId} onCancel={() => { localStorage.removeItem('activeRideId'); setActiveRequestId(null); setStep('selecting'); }} />}
                     {step === 'found' && <VolunteerFound requestData={acceptedRequestData} onReset={() => setStep('selecting')} />}
                     {step === 'in_progress' && <RideInProgress requestData={acceptedRequestData} />}
-                    {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} onSubmit={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} showToast={showToast} />}
+                    
+                    {/* ✅ RateAndTip now uses global toast, no prop needed */}
+                    {step === 'rating' && <RateAndTip requestData={acceptedRequestData} onSkip={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} onSubmit={() => { setStep('selecting'); setActiveRequestId(null); localStorage.removeItem('activeRideId'); }} />}
+                    
                     <BottomNav activeTab="home" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} />
-                    <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => { setShowSOS(false); showToast("SOS Alert Sent!", "error"); }} />
+                    
+                    <SOSModal isOpen={showSOS} onClose={() => setShowSOS(false)} onConfirm={() => { setShowSOS(false); addToast("SOS Alert Sent to Authorities!", "error"); }} />
                 </>
-            ) : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
+            </AuthGuard>
+        } />
 
-            <Route path="/profile" element={user ? <UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-            <Route path="/activity" element={user ? <div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-            <Route path="/volunteer" element={user && user.role === 'volunteer' ? <VolunteerDashboard user={user} globalToast={showToast} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-            <Route path="/admin" element={user && user.role === 'admin' ? <AdminPanel onLogout={handleLogout} /> : <Login onLogin={handleLoginSuccess} onBack={() => navigate('/')} />} />
-          </Routes>
-        </div>
-      )}
+        <Route path="/profile" element={<AuthGuard user={user}><UserProfile user={user} onLogout={handleLogout} onBack={() => navigate('/home')} /></AuthGuard>} />
+        <Route path="/activity" element={<AuthGuard user={user}><div className="h-screen bg-[#050505] flex flex-col"><ActivityHistory user={user} onBack={() => navigate('/home')}/><BottomNav activeTab="activity" onHomeClick={() => navigate('/home')} onProfileClick={() => navigate('/profile')} onActivityClick={() => navigate('/activity')} onSOSClick={() => setShowSOS(true)} /></div></AuthGuard>} />
+        
+        {/* ✅ VolunteerDashboard uses global toast internally */}
+        <Route path="/volunteer" element={<AuthGuard user={user} allowedRole="volunteer"><VolunteerDashboard user={user} /></AuthGuard>} />
+        <Route path="/admin" element={<AuthGuard user={user} allowedRole="admin"><AdminPanel onLogout={handleLogout} /></AuthGuard>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  );
+};
+
+// ✅ App Wrapper
+function App() {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </ErrorBoundary>
   );
 }

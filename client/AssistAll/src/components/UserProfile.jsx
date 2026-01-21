@@ -4,8 +4,10 @@ import {
   Bell, HelpCircle, ArrowLeft, Activity, Heart, Phone, 
   Lock, Globe, Smartphone, Plus, History, Check, X, Trash2, Wallet
 } from 'lucide-react';
+import { useToast } from './ToastContext'; // ✅ Import Context
 
 const UserProfile = ({ user, onLogout, onBack }) => {
+  const { addToast } = useToast(); // ✅ Use Hook
   const [subPage, setSubPage] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   
@@ -21,17 +23,22 @@ const UserProfile = ({ user, onLogout, onBack }) => {
   // --- ACTIONS ---
   const handleSetActive = (id) => {
       setPaymentMethods(prev => prev.map(m => ({ ...m, active: m.id === id })));
+      addToast("Default payment method updated", "info");
   };
 
   const handleDeleteMethod = (e, id) => {
       e.stopPropagation();
       if(window.confirm("Remove this payment method?")) {
           setPaymentMethods(prev => prev.filter(m => m.id !== id));
+          addToast("Payment method removed", "success");
       }
   };
 
   const handleAddPayment = () => {
-      if (newPaymentType === 'upi' && !newUpiId) return alert("Please enter UPI ID");
+      if (newPaymentType === 'upi' && !newUpiId) {
+          addToast("Please enter a valid UPI ID", "error");
+          return;
+      }
       
       const newMethod = {
           id: Date.now(),
@@ -45,12 +52,13 @@ const UserProfile = ({ user, onLogout, onBack }) => {
       setPaymentMethods([...paymentMethods, newMethod]);
       setShowAddModal(false);
       setNewUpiId('');
+      addToast("Payment Method Added Successfully!", "success");
   };
 
   // --- RENDERERS ---
 
   const renderAddPaymentModal = () => (
-      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4">
+      <div className="fixed inset-0 z-[6000] flex items-end justify-center sm:items-center p-4">
           <div className="absolute inset-0 bg-black/90 backdrop-blur-sm transition-opacity" onClick={() => setShowAddModal(false)}></div>
           
           <div className="relative bg-[#1a1a1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
@@ -103,9 +111,9 @@ const UserProfile = ({ user, onLogout, onBack }) => {
                           <h3 className="text-xl font-bold text-white">Medical ID</h3>
                       </div>
                       <div className="space-y-4">
-                          <div className="flex justify-between items-center border-b border-red-500/10 pb-3"><span className="text-red-400 text-sm font-medium">Blood Type</span><span className="font-mono font-bold text-white text-lg">O+</span></div>
-                          <div className="flex justify-between items-center border-b border-red-500/10 pb-3"><span className="text-red-400 text-sm font-medium">Allergies</span><span className="font-bold text-white">Peanuts, Penicillin</span></div>
-                          <div className="flex justify-between items-center pt-1"><span className="text-red-400 text-sm font-medium">Emergency Contact</span><div className="text-right"><span className="font-bold text-white block">Sarah (Sister)</span><span className="text-xs text-red-300 font-mono">+91 98765 43210</span></div></div>
+                          <div className="flex justify-between items-center border-b border-red-500/10 pb-3"><span className="text-red-400 text-sm font-medium">Blood Type</span><span className="font-mono font-bold text-white text-lg">{user.bloodGroup || "O+"}</span></div>
+                          <div className="flex justify-between items-center border-b border-red-500/10 pb-3"><span className="text-red-400 text-sm font-medium">Conditions</span><span className="font-bold text-white">{user.medicalCondition || "None"}</span></div>
+                          <div className="flex justify-between items-center pt-1"><span className="text-red-400 text-sm font-medium">Emergency</span><div className="text-right"><span className="font-bold text-white block">{user.emergencyContact?.name || "None"}</span><span className="text-xs text-red-300 font-mono">{user.emergencyContact?.phone || ""}</span></div></div>
                       </div>
                   </div>
               </div>
@@ -113,12 +121,10 @@ const UserProfile = ({ user, onLogout, onBack }) => {
           </div>
       );
 
-      // --- ENABLED PAYMENTS PAGE ---
       if (subPage === 'payments') return (
           <div className="animate-in slide-in-from-right duration-300 relative">
               {showAddModal && renderAddPaymentModal()}
               
-              {/* Wallet Balance */}
               <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 p-6 rounded-3xl border border-blue-500/20 mb-8 relative overflow-hidden">
                   <div className="relative z-10 flex justify-between items-end">
                       <div><p className="text-blue-300 text-xs font-bold uppercase tracking-widest mb-1">AssistAll Wallet</p><h2 className="text-3xl font-black text-white">₹2,450</h2></div>
@@ -188,7 +194,7 @@ const UserProfile = ({ user, onLogout, onBack }) => {
                   <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
                       <div className="flex items-center justify-between p-4 border-b border-white/5">
                           <div className="flex items-center gap-3"><Bell size={20} className="text-neutral-400"/><span className="text-white font-medium">Push Notifications</span></div>
-                          <button onClick={() => setNotificationsEnabled(!notificationsEnabled)} className={`w-12 h-7 rounded-full p-1 transition-colors duration-300 ${notificationsEnabled ? 'bg-green-600' : 'bg-neutral-700'}`}><div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`}></div></button>
+                          <button onClick={() => { setNotificationsEnabled(!notificationsEnabled); addToast(`Notifications ${!notificationsEnabled ? 'Enabled' : 'Disabled'}`, "info"); }} className={`w-12 h-7 rounded-full p-1 transition-colors duration-300 ${notificationsEnabled ? 'bg-green-600' : 'bg-neutral-700'}`}><div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`}></div></button>
                       </div>
                       <div className="flex items-center justify-between p-4"><div className="flex items-center gap-3"><Globe size={20} className="text-neutral-400"/><span className="text-white font-medium">Language</span></div><span className="text-neutral-500 text-sm flex items-center">English <ChevronRight size={16}/></span></div>
                   </div>
