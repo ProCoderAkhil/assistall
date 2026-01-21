@@ -2,86 +2,102 @@ const express = require('express');
 const router = express.Router();
 const Request = require('../models/Request');
 
-// GET REQUESTS
+// --- 1. RESET DATABASE (For Testing) ---
+router.delete('/reset', async (req, res) => {
+    try {
+        await Request.deleteMany({});
+        res.json({ message: "Reset Successful" });
+    } catch (err) { res.status(500).json({ message: "Reset Failed" }); }
+});
+
+// --- 2. GET REQUESTS ---
 router.get('/', async (req, res) => {
     try {
-        const twentyFourHoursAgo = new Date(new Date().getTime() - (24 * 60 * 60 * 1000));
-        const requests = await Request.find({
-            $or: [
-                { status: 'pending', createdAt: { $gte: twentyFourHoursAgo } },
-                { status: { $in: ['accepted', 'in_progress'] } }
-            ]
-        }).sort({ createdAt: -1 });
-        res.status(200).json(requests);
-    } catch (err) { res.status(500).json({ message: "Server Error" }); }
+        const { volunteer } = req.query;
+        let query = {};
+
+        // If a volunteer is querying, show available rides + their active rides
+        if (volunteer) {
+             query = {
+                 $or: [
+                     { status: 'pending' },
+                     { status: 'accepted', volunteerName: volunteer },
+                     { status: 'in_progress', volunteerName: volunteer },
+                     // Include recently completed so they don't vanish instantly
+                     { status: 'completed', volunteerName: volunteer } 
+                 ]
+             };
+        }
+        
+        // Return requests sorted by newest first
+        const requests = await Request.find(query).sort({ createdAt: -1 });
+        res.json(requests);
+    } catch (err) { res.status(500).json({ message: "Error fetching requests" }); }
 });
 
-// CREATE REQUEST
+// --- 3. CREATE RIDE ---
 router.post('/', async (req, res) => {
     try {
-        const otp = Math.floor(1000 + Math.random() * 9000).toString();
         const newRequest = new Request({
-            ...req.body,
-            pickupOTP: otp
+            requesterName: req.body.requesterName || "User",
+            requesterId: req.body.requesterId, // Ensure ID is saved
+            type: req.body.type || 'Ride',
+            price: req.body.price || 0,
+            status: 'pending',
+            pickup: req.body.pickup || "Kottayam",
+            drop: req.body.drop || "Hospital",
+            createdAt: Date.now()
         });
-        const savedRequest = await newRequest.save();
-        res.status(201).json(savedRequest);
-    } catch (err) { res.status(500).json({ message: err.message }); }
+        await newRequest.save();
+        res.status(201).json(newRequest);
+    } catch (err) { res.status(500).json({ message: "Failed to create request" }); }
 });
 
-// UPDATE STATUS (Handle Accept, Pickup, Complete, Cancel, Rate)
+// --- 4. RIDE ACTIONS (Handle All Status Changes) ---
 router.put('/:id/:action', async (req, res) => {
     try {
         const { action } = req.params;
-        const { volunteerId, volunteerName, otp, rating, review } = req.body;
-        const request = await Request.findById(req.params.id);
+        const ride = await Request.findById(req.params.id);
+        
+        if (!ride) return res.status(404).json({ message: "Not Found" });
 
-        if (!request) return res.status(404).json({ message: "Request not found" });
-
-        // LOGIC CHECK: Prevent double booking
-        if (action === 'accept' && request.status !== 'pending') {
-            return res.status(409).json({ message: "Ride already taken by another volunteer" });
-        }
-
+        // 1. Volunteer Accepts
         if (action === 'accept') {
-            request.status = 'accepted';
-            request.volunteerId = volunteerId;
-            request.volunteerName = volunteerName;
+            if (ride.status !== 'pending') return res.status(400).json({ message: "Ride already taken" });
+            ride.status = 'accepted';
+            ride.volunteerName = req.body.volunteerName;
+            ride.volunteerId = req.body.volunteerId;
         } 
+        
+        // 2. Volunteer Starts Trip
         else if (action === 'pickup') {
-            if (request.pickupOTP !== otp) return res.status(400).json({ message: "Incorrect OTP" });
-            request.status = 'in_progress';
-        } 
+            ride.status = 'in_progress';
+        }
+        
+        // 3. Volunteer Completes Trip
         else if (action === 'complete') {
-            request.status = 'completed';
+            ride.status = 'completed';
         }
+
+        // 4. User Cancels (Missing in your code)
         else if (action === 'cancel') {
-            request.status = 'cancelled';
-        }
-        else if (action === 'rate') {
-            // New Rating Logic
-            request.rating = rating;
-            request.review = review;
+            ride.status = 'cancelled';
         }
 
-        await request.save();
-        res.json(request);
+        // 5. User Reviews (Missing in your code)
+        else if (action === 'review') {
+            ride.rating = req.body.rating;
+            ride.review = req.body.review;
+            ride.tip = req.body.tip;
+            ride.paymentMethod = req.body.paymentMethod;
+        }
+
+        await ride.save();
+        res.json(ride);
     } catch (err) { 
-        res.status(500).json({ message: err.message }); 
+        console.error("Update Error:", err);
+        res.status(500).json({ message: "Update Error" }); 
     }
-});
-
-// GET LEADERBOARD
-router.get('/leaderboard', async (req, res) => {
-    try {
-        const stats = await Request.aggregate([
-            { $match: { status: 'completed' } },
-            { $group: { _id: "$volunteerName", rides: { $sum: 1 }, earnings: { $sum: "$price" } } },
-            { $sort: { rides: -1 } },
-            { $limit: 5 }
-        ]);
-        res.json(stats);
-    } catch (err) { res.status(500).json({ message: "Server Error" }); }
 });
 
 module.exports = router;

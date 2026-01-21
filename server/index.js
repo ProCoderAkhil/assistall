@@ -23,11 +23,14 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', require('./routes/auth'));
 
 // 2. Admin Panel (Volunteer Management, OTP Generation, Force Verify)
-// ✅ CRITICAL: This enables the Admin Panel features
 app.use('/api/admin', require('./routes/admin'));
 
 // 3. Service Requests (Rides, Help, SOS)
 app.use('/api/requests', require('./routes/requests'));
+
+// 4. Payment Gateway (Razorpay Orders & Verification)
+// ✅ NEW: This connects the payment logic to your server
+app.use('/api/payment', require('./routes/payment'));
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;

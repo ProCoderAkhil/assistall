@@ -8,7 +8,9 @@ import { useToast } from './ToastContext';
 
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://assistall-server.onrender.com';
 
-// --- SUB-COMPONENTS ---
+// ==========================================
+// 1. SUB-COMPONENTS
+// ==========================================
 
 const StatusBanner = ({ status }) => {
     if (!status || status === 'pending' || status === 'completed') return null;
@@ -111,7 +113,7 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
 };
 
 // ==========================================
-// 2. MAIN CONTROLLER
+// 2. MAIN CONTROLLER (FIXED LOGIC)
 // ==========================================
 
 const UserDashboard = () => {
@@ -141,10 +143,10 @@ const UserDashboard = () => {
         try { const res = await fetch(`${API_BASE}/api/auth/user/${volunteerId}`); if (res.ok) setVolunteerDetails(await res.json()); } catch (e) {}
     };
 
-    // ✅ FIXED POLLING LOGIC
+    // ✅ FIXED POLLING & STATE LOGIC
     useEffect(() => {
         if (!rideIdToPoll) {
-            if (viewState !== 'completed') setViewState('menu');
+            if (viewState !== 'completed' && !activeRide) setViewState('menu');
             return;
         }
 
@@ -152,39 +154,33 @@ const UserDashboard = () => {
 
         const pollInterval = setInterval(async () => {
             try {
-                // IMPORTANT: Stop polling if we are already in the "completed" / rating state
-                if (viewState === 'completed') return;
-
                 const res = await fetch(`${API_BASE}/api/requests?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
                     const myRide = data.find(r => r._id === rideIdToPoll);
 
                     if (myRide) {
-                        setActiveRide(myRide);
+                        setActiveRide(myRide); // Always update state with latest data
 
-                        // 1. RIDE COMPLETED (Switch View, but DO NOT clear storage yet)
+                        // 1. FORCE COMPLETE - CRITICAL FIX
+                        // If backend says completed, we MUST switch to completed view immediately
                         if (myRide.status === 'completed') {
-                            setViewState('completed');
-                            addToast("Ride Completed", "success");
-                            return; 
-                        }
-
-                        // 2. ACCEPTED
-                        if (myRide.status === 'accepted') {
-                            if (viewState !== 'active_ride') {
-                                addToast("Volunteer Found!", "success");
-                                setViewState('active_ride');
+                            if (viewState !== 'completed') {
+                                setViewState('completed');
+                                addToast("Ride Completed", "success");
                             }
+                            // Do not return here, let state update naturally, but UI handles priority below
+                        }
+                        
+                        // 2. ACCEPTED
+                        else if (myRide.status === 'accepted') {
+                            if (viewState !== 'active_ride') setViewState('active_ride');
                             setVolunteerDetails(prev => { if(!prev) fetchVolunteerDetails(myRide.volunteerId); return prev; });
                         } 
                         
                         // 3. IN PROGRESS
                         else if (myRide.status === 'in_progress') {
-                            if (viewState !== 'active_ride') {
-                                addToast("Ride In Progress", "info");
-                                setViewState('active_ride');
-                            }
+                            if (viewState !== 'active_ride') setViewState('active_ride');
                         }
                     }
                 }
@@ -192,9 +188,8 @@ const UserDashboard = () => {
         }, 3000);
 
         return () => clearInterval(pollInterval);
-    }, [rideIdToPoll, viewState, addToast]);
+    }, [rideIdToPoll, viewState, addToast, activeRide]);
 
-    // ✅ Cleanup is only called AFTER feedback is submitted
     const handleRatingComplete = () => {
         localStorage.removeItem('activeRideId');
         setRideIdToPoll(null);
@@ -211,8 +206,9 @@ const UserDashboard = () => {
         addToast("Request Cancelled", "info");
     };
 
-    // ✅ RENDER PRIORITY: If completed, show Rate Screen immediately
-    if (viewState === 'completed') {
+    // ✅ RENDER PRIORITY: FORCE Rating Screen if status is 'completed'
+    // This overrides any 'On Trip' view state if the data says the ride is done.
+    if (activeRide?.status === 'completed') {
         return <RateAndTip requestData={activeRide} onSkip={handleRatingComplete} onSubmit={handleRatingComplete} />;
     }
 
@@ -249,6 +245,7 @@ const UserDashboard = () => {
                 </>
             )}
 
+            {/* Only show ride in progress if status matches */}
             {viewState === 'active_ride' && activeRide?.status === 'in_progress' && (
                 <RideInProgress requestData={activeRide} />
             )}

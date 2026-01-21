@@ -3,13 +3,12 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
 // ---------------------------------------------------------
-// 🔐 RAZORPAY CONFIGURATION (Live Credentials)
+// 🔐 RAZORPAY CONFIGURATION
 // ---------------------------------------------------------
 const razorpay = new Razorpay({
     key_id: 'rzp_test_Rp78fSKZ69hMxt', 
-    key_secret: 'G2VpSZXzQN7HGSu9zsgSKvAc', // <--- Your Secret Key Added Here
+    key_secret: 'G2VpSZXzQN7HGSu9zsgSKvAc',
 });
-// ---------------------------------------------------------
 
 // 1. CREATE ORDER API
 router.post('/orders', async (req, res) => {
@@ -36,7 +35,7 @@ router.post('/verify', async (req, res) => {
         const body = razorpay_order_id + "|" + razorpay_payment_id;
         
         const expectedSignature = crypto
-            .createHmac('sha256', 'G2VpSZXzQN7HGSu9zsgSKvAc') // <--- Secret Key here too
+            .createHmac('sha256', 'G2VpSZXzQN7HGSu9zsgSKvAc') // Must match the key_secret above
             .update(body.toString())
             .digest('hex');
 
@@ -46,6 +45,7 @@ router.post('/verify', async (req, res) => {
             res.status(400).json({ status: "failure" });
         }
     } catch (error) {
+        console.error("Verification Error:", error);
         res.status(500).json({ status: "error" });
     }
 });
