@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Shield, Users, Search, AlertTriangle, MapPin, Menu, 
+  Shield, Users, Search, Bell, AlertTriangle, MapPin, Menu, Phone, 
   ChevronRight, CheckCircle, Map as MapIcon, FileText,
-  Siren, PhoneCall, Radio, Power, Video, Key, RefreshCw, LogOut
+  Siren, PhoneCall, Radio, Trash2, Power, Video, Key, RefreshCw, LogOut, Filter, XCircle
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -18,33 +18,21 @@ const AdminPanel = ({ onLogout }) => {
   
   // Data States
   const [activeRides, setActiveRides] = useState([]);
-  const [allUsers, setAllUsers] = useState([]); // Master list
+  const [volunteers, setVolunteers] = useState([]); // Stores ALL volunteers
+  const [allUsers, setAllUsers] = useState([]);
   const [sosAlerts, setSosAlerts] = useState([]);
+  const [reports, setReports] = useState([]); 
   const [selectedVol, setSelectedVol] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   
   // Interview Logic
   const [generatedCode, setGeneratedCode] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Derived State (Fixes "Missing Volunteer" bug)
-  const volunteers = useMemo(() => {
-      return allUsers.filter(u => u.role === 'volunteer');
-  }, [allUsers]);
+  // UI Logic
+  const [viewFilter, setViewFilter] = useState('pending'); // 'pending' | 'all'
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredVolunteers = useMemo(() => {
-      return volunteers.filter(v => 
-          v.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          v.email.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-  }, [volunteers, searchTerm]);
-
-  const stats = {
-      total: allUsers.length,
-      pending: volunteers.filter(v => v.status !== 'approved').length,
-      active: activeRides.length,
-      incidents: sosAlerts.length
-  };
+  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, incidents: 0 });
 
   // Map Icons
   const icons = useMemo(() => ({
@@ -61,20 +49,45 @@ const AdminPanel = ({ onLogout }) => {
 
   const fetchData = async () => {
     try {
-        // 1. Fetch ALL Users (Single source of truth)
+        // 1. Fetch ALL Volunteers (Fixes "No Request" bug)
+        const resVols = await fetch(`${DEPLOYED_API_URL}/api/admin/volunteers`);
+        if (resVols.ok) {
+            const data = await resVols.json();
+            if(Array.isArray(data)) setVolunteers(data);
+        } else {
+            // Fallback: Filter from all users if specific endpoint fails
+            const resAll = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
+            if (resAll.ok) {
+                const users = await resAll.json();
+                if(Array.isArray(users)) {
+                    setAllUsers(users);
+                    setVolunteers(users.filter(u => u.role === 'volunteer'));
+                }
+            }
+        }
+
+        // 2. All Users (for User DB tab)
         const resUsers = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
         if (resUsers.ok) {
             const users = await resUsers.json();
             if(Array.isArray(users)) setAllUsers(users);
         }
 
-        // 2. Active Requests
+        // 3. Active Requests & SOS
         const resReqs = await fetch(`${DEPLOYED_API_URL}/api/requests`);
         if (resReqs.ok) {
             const data = await resReqs.json();
             if(Array.isArray(data)) {
                 setActiveRides(data.filter(r => r.status === 'in_progress' || r.status === 'accepted'));
                 setSosAlerts(data.filter(r => r.isSOS || r.status === 'sos'));
+                
+                // Update stats
+                setStats({
+                    total: allUsers.length,
+                    pending: volunteers.filter(v => v.status !== 'approved').length,
+                    active: data.filter(r => r.status === 'in_progress').length,
+                    incidents: data.filter(r => r.isSOS).length
+                });
             }
         }
     } catch (e) { console.error("Sync Error", e); }
@@ -82,22 +95,26 @@ const AdminPanel = ({ onLogout }) => {
 
   const handleStatusUpdate = async (id, status) => {
       if(!window.confirm(`Set user status to ${status}?`)) return;
+      
+      // Optimistic Update
+      const updatedVols = volunteers.map(v => v._id === id ? { ...v, status } : v);
+      setVolunteers(updatedVols);
+      if (selectedVol && selectedVol._id === id) setSelectedVol({ ...selectedVol, status });
+
       try {
-          const res = await fetch(`${DEPLOYED_API_URL}/api/admin/verify/${id}`, {
+          await fetch(`${DEPLOYED_API_URL}/api/admin/verify/${id}`, {
               method: 'PUT', headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status })
           });
-          if (res.ok) {
-              alert("Status Updated!");
-              fetchData(); 
-              setSelectedVol(null); 
-              setGeneratedCode(null);
-          } else {
-              alert("Server Error: Check backend logs");
-          }
-      } catch (e) { alert("Network Error"); }
+          alert("Status Updated!");
+          fetchData(); 
+          setGeneratedCode(null);
+      } catch (e) { 
+          alert("Update Failed"); 
+          fetchData(); // Revert
+      }
   };
 
-  // ✅ ROBUST OTP GENERATION
+  // ✅ OTP GENERATION FUNCTION
   const generateInterviewCode = async (userId) => {
       setIsGenerating(true);
       
@@ -109,7 +126,7 @@ const AdminPanel = ({ onLogout }) => {
           const res = await fetch(`${DEPLOYED_API_URL}/api/admin/generate-code`, {
               method: 'POST',
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId, code: localCode }) // Send code too just in case backend logic relies on it
+              body: JSON.stringify({ userId, code: localCode }) 
           });
 
           if (res.ok) {
@@ -126,6 +143,26 @@ const AdminPanel = ({ onLogout }) => {
           setIsGenerating(false);
       }
   };
+
+  // Filter Logic: Pending vs All
+  const displayVolunteers = useMemo(() => {
+      let filtered = volunteers;
+      
+      // Apply Tab Filter
+      if (viewFilter === 'pending') {
+          filtered = filtered.filter(v => v.status !== 'approved' && v.status !== 'active');
+      }
+      
+      // Apply Search Filter
+      if (searchTerm) {
+          filtered = filtered.filter(v => 
+              v.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+              v.email.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+      }
+      
+      return filtered;
+  }, [volunteers, viewFilter, searchTerm]);
 
   // --- COMPONENT: LIVE MAP ---
   const LiveMap = () => (
@@ -185,7 +222,14 @@ const AdminPanel = ({ onLogout }) => {
                                 <h2 className="text-lg font-bold">Volunteer List</h2>
                                 <button onClick={fetchData} className="p-2 bg-white/5 rounded-full hover:bg-white/10"><RefreshCw size={14}/></button>
                             </div>
-                            {/* Search Bar for Volunteers */}
+                            
+                            {/* Filter Buttons */}
+                            <div className="flex bg-black rounded-lg p-1 border border-white/10">
+                                <button onClick={() => setViewFilter('pending')} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold transition ${viewFilter==='pending' ? 'bg-white text-black' : 'text-gray-500'}`}>Pending</button>
+                                <button onClick={() => setViewFilter('all')} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold transition ${viewFilter==='all' ? 'bg-white text-black' : 'text-gray-500'}`}>All</button>
+                            </div>
+
+                            {/* Search Bar */}
                             <div className="relative">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
                                 <input 
@@ -198,8 +242,7 @@ const AdminPanel = ({ onLogout }) => {
                             </div>
                         </div>
                         <div className="overflow-y-auto flex-1 p-4 space-y-2">
-                            {/* Show ALL volunteers, filter by search */}
-                            {filteredVolunteers.length > 0 ? filteredVolunteers.map(v => (
+                            {displayVolunteers.length > 0 ? displayVolunteers.map(v => (
                                 <div key={v._id} onClick={() => { setSelectedVol(v); setGeneratedCode(null); }} className={`p-4 rounded-xl border cursor-pointer flex justify-between items-center ${selectedVol?._id === v._id ? 'bg-blue-900/20 border-blue-500' : 'bg-[#1a1a1a] border-white/5 text-gray-400'}`}>
                                     <div>
                                         <h4 className="font-bold text-sm text-white">{v.name}</h4>
@@ -211,7 +254,7 @@ const AdminPanel = ({ onLogout }) => {
                                     <ChevronRight size={16}/>
                                 </div>
                             )) : (
-                                <div className="p-8 text-center text-gray-600 text-sm">No volunteers found. Check "All Users" tab.</div>
+                                <div className="p-8 text-center text-gray-600 text-sm">No volunteers found.</div>
                             )}
                         </div>
                     </div>
@@ -225,7 +268,9 @@ const AdminPanel = ({ onLogout }) => {
                                         <h1 className="text-3xl font-black">{selectedVol.name}</h1>
                                         <p className="text-gray-500 text-sm mt-1">{selectedVol.email} • {selectedVol.phone}</p>
                                     </div>
-                                    {selectedVol.status !== 'approved' && <div className="bg-yellow-500/20 text-yellow-500 px-4 py-2 rounded-full font-bold text-xs animate-pulse">Action Required</div>}
+                                    <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${selectedVol.status==='approved' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                                        {selectedVol.status || 'Pending'}
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-6 mb-8 flex-1 overflow-y-auto">
@@ -251,7 +296,7 @@ const AdminPanel = ({ onLogout }) => {
                                     </div>
                                 </div>
 
-                                {/* --- OTP GENERATION PANEL --- */}
+                                {/* --- OTP GENERATION PANEL (Visible if Pending) --- */}
                                 {selectedVol.status !== 'approved' && (
                                     <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-white/10 mb-6 flex flex-col items-center text-center">
                                         <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><Video size={16}/> Interview Panel</h3>
@@ -262,10 +307,9 @@ const AdminPanel = ({ onLogout }) => {
                                                 {isGenerating ? "Generating..." : <><Key size={18}/> Generate OTP Code</>}
                                             </button>
                                         ) : (
-                                            <div className="animate-in zoom-in">
-                                                <p className="text-xs text-blue-400 font-bold mb-1 uppercase tracking-widest">Read this code to volunteer</p>
-                                                <div className="text-5xl font-mono font-black text-white tracking-[0.2em] mb-2 bg-[#121212] px-4 py-2 rounded-xl border border-blue-500/50">{generatedCode}</div>
-                                                <p className="text-xs text-gray-600">Waiting for user input...</p>
+                                            <div className="animate-in zoom-in w-full">
+                                                <div className="text-5xl font-mono font-black text-white tracking-[0.2em] mb-2 bg-[#121212] py-4 rounded-xl border border-blue-500/50">{generatedCode}</div>
+                                                <p className="text-xs text-gray-500">Read this code to the volunteer</p>
                                             </div>
                                         )}
                                     </div>
@@ -273,10 +317,17 @@ const AdminPanel = ({ onLogout }) => {
 
                                 {/* Actions */}
                                 <div className="grid grid-cols-2 gap-4 mt-auto">
-                                    <button onClick={() => handleStatusUpdate(selectedVol._id, 'rejected')} className="py-4 rounded-xl border border-red-900/50 text-red-500 font-bold hover:bg-red-900/10">Reject Application</button>
-                                    <button onClick={() => handleStatusUpdate(selectedVol._id, 'approved')} className="py-4 rounded-xl font-bold bg-green-600 text-black hover:bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]">
-                                        <span className="flex items-center justify-center gap-2"><Power size={18}/> Force Activate</span>
-                                    </button>
+                                    <button onClick={() => handleStatusUpdate(selectedVol._id, 'rejected')} className="py-4 rounded-xl border border-red-900/50 text-red-500 font-bold hover:bg-red-900/10 transition">Reject</button>
+                                    
+                                    {selectedVol.status !== 'approved' ? (
+                                        <button onClick={() => handleStatusUpdate(selectedVol._id, 'approved')} className="py-4 rounded-xl font-bold bg-green-600 text-black hover:bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] flex items-center justify-center gap-2 transition">
+                                            <Power size={18}/> Force Activate
+                                        </button>
+                                    ) : (
+                                        <div className="py-4 rounded-xl font-bold bg-green-900/20 text-green-500 border border-green-500/30 flex items-center justify-center gap-2">
+                                            <CheckCircle size={18}/> Active Account
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : <div className="h-full flex flex-col items-center justify-center text-gray-600"><Users size={48} className="mb-4 opacity-20"/><p>Select a volunteer from the queue.</p></div>}
@@ -298,20 +349,40 @@ const AdminPanel = ({ onLogout }) => {
                         <table className="w-full text-left text-sm text-gray-400">
                             <thead className="bg-[#1a1a1a] text-gray-200 uppercase text-xs"><tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
                             <tbody>
-                                {allUsers.map((u, i) => (
+                                {Array.isArray(allUsers) && allUsers.map((u, i) => (
                                     <tr key={i} className="border-b border-white/5 hover:bg-white/5">
                                         <td className="p-4 text-white font-bold">{u.name}<br/><span className="text-[10px] text-gray-500 font-normal">{u.email}</span></td>
                                         <td className="p-4 uppercase text-xs font-bold">{u.role}</td>
                                         <td className="p-4">{u.status === 'approved' ? <span className="text-green-500 flex items-center gap-1"><CheckCircle size={12}/> Active</span> : <span className="text-yellow-500">Pending</span>}</td>
                                         <td className="p-4">
-                                            {u.role === 'volunteer' && u.status !== 'approved' && (
-                                                <button onClick={() => handleStatusUpdate(u._id, 'approved')} className="text-blue-400 hover:text-white font-bold text-xs border border-blue-500/30 px-3 py-1 rounded-lg">Approve</button>
+                                            {u.role === 'volunteer' && u.status !== 'approved' ? (
+                                                <button onClick={() => handleStatusUpdate(u._id, 'approved')} className="text-blue-400 hover:text-white font-bold text-xs border border-blue-500/30 px-3 py-1 rounded-lg transition">Approve</button>
+                                            ) : (
+                                                <button className="text-red-400 hover:text-white font-bold text-xs border border-red-500/30 px-3 py-1 rounded-lg flex items-center gap-1 transition"><XCircle size={12}/> Ban</button>
                                             )}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* --- 4. INCIDENTS (SOS) --- */}
+            {activeTab === 'incidents' && (
+                <div className="flex gap-6 h-full overflow-hidden">
+                    <div className="w-1/2 flex flex-col gap-4 overflow-y-auto">
+                        <h3 className="text-red-500 font-bold text-lg uppercase tracking-widest flex items-center gap-2"><Siren size={20}/> High Priority (SOS)</h3>
+                        {sosAlerts.length === 0 ? <div className="p-8 bg-[#121212] rounded-2xl border border-white/5 text-center text-gray-500">No Active SOS Alerts</div> : sosAlerts.map(alert => (
+                            <div key={alert._id} className="bg-red-900/10 border border-red-500 rounded-2xl p-6 relative overflow-hidden animate-pulse">
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div><h4 className="text-2xl font-black text-white">{alert.requesterName}</h4><p className="text-red-300 font-medium mt-1 flex items-center gap-2"><MapPin size={16}/> {alert.drop}</p></div>
+                                    <div className="text-right"><p className="text-xs text-red-400 font-bold uppercase">Volunteer</p><p className="text-white font-bold">{alert.volunteerName}</p></div>
+                                </div>
+                                <div className="flex gap-3 mt-6 relative z-10"><button className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Radio size={18}/> Dispatch Team</button><button className="flex-1 bg-[#222] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 border border-white/10"><PhoneCall size={18}/> Call User</button></div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

@@ -2,55 +2,43 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 
-// --- 1. GET ALL VOLUNTEERS (Fixes "No Request" Issue) ---
+// 1. GET VOLUNTEERS (Fixes "No Request" - fetches all so none are hidden)
 router.get('/volunteers', async (req, res) => {
     try {
-        // Fetches everyone with role='volunteer' (pending, approved, or rejected)
         const volunteers = await User.find({ role: 'volunteer' }).sort({ createdAt: -1 });
         res.json(volunteers);
     } catch (err) {
-        res.status(500).json({ message: "Server Error", error: err.message });
+        res.status(500).json({ message: "Server Error" });
     }
 });
 
-// --- 2. GENERATE INTERVIEW CODE (Fixes "No OTP" Issue) ---
+// 2. GENERATE OTP
 router.post('/generate-code', async (req, res) => {
     try {
-        const { userId, code: clientCode } = req.body;
+        const { userId } = req.body;
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Use provided code (if generated on client) or generate a new one
-        const code = clientCode || Math.floor(100000 + Math.random() * 900000).toString();
+        // Save code to user
+        await User.findByIdAndUpdate(userId, { interviewCode: code });
         
-        // Save this code to the user's record so they can verify it
-        const updatedUser = await User.findByIdAndUpdate(
-            userId, 
-            { interviewCode: code }, 
-            { new: true }
-        );
-
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        
-        res.json({ success: true, code: code });
+        res.json({ success: true, code });
     } catch (err) {
-        console.error("Code Gen Error:", err);
-        res.status(500).json({ message: "Code Generation Failed" });
+        res.status(500).json({ message: "Code Gen Failed" });
     }
 });
 
-// --- 3. FORCE APPROVE USER (The Bypass Button) ---
+// 3. FORCE APPROVE
 router.put('/verify/:id', async (req, res) => {
     try {
-        const { status } = req.body; // Expect 'approved' or 'rejected'
+        const { status } = req.body; // 'approved'
         const user = await User.findByIdAndUpdate(req.params.id, { status }, { new: true });
         res.json(user);
     } catch (err) {
-        res.status(500).json({ message: "Update Failed", error: err.message });
+        res.status(500).json({ message: "Update Failed" });
     }
 });
 
-// --- 4. GET ALL USERS (Master List) ---
+// 4. ALL USERS
 router.get('/all-users', async (req, res) => {
     try {
         const users = await User.find({}).sort({ createdAt: -1 });
