@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
-  // Basic Info
+  // --- Basic Info ---
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -9,18 +9,17 @@ const UserSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'volunteer', 'admin'], default: 'user' },
   address: { type: String },
 
-  // ✅ CRITICAL FOR ADMIN PANEL
-  // We unify everything to use 'status' for logic
+  // --- Status & Admin Fields ---
   status: { type: String, enum: ['pending', 'approved', 'rejected', 'active'], default: 'pending' },
-  interviewCode: { type: String }, // For OTP
+  interviewCode: { type: String },
 
-  // User / Caregiver Specific
+  // --- User / Caregiver Fields ---
   isCaregiverAccount: { type: Boolean, default: false },
   caregiverName: { type: String },
   age: { type: String },
   gender: { type: String },
   bloodGroup: { type: String },
-  govtIdNumber: { type: String },
+  govtIdNumber: { type: String }, // For Users (Text)
   livingSituation: { type: String },
   
   emergencyContact: {
@@ -35,17 +34,19 @@ const UserSchema = new mongoose.Schema({
     hearingAid: { type: Boolean, default: false }
   },
 
-  // Volunteer Specific
+  // --- Volunteer Specific Fields ---
   serviceSector: { type: String },
-  govtId: { type: String },
+  govtId: { type: String }, // For Volunteers (File Name)
   drivingLicense: { type: String },
   medicalCertificate: { type: String },
   volunteerCertificate: { type: String },
   selfieImage: { type: String },
+  
+  // ✅ FIX: Correctly define nested object to prevent crashes
   vehicleDetails: {
-    type: String,
-    model: String,
-    number: String
+    vehicleType: { type: String }, 
+    model: { type: String },
+    number: { type: String }
   },
   
   createdAt: { type: Date, default: Date.now }

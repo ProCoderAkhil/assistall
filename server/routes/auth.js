@@ -4,36 +4,45 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// --- REGISTER ---
+// --- REGISTER ROUTE ---
 router.post('/register', async (req, res) => {
   const { 
       name, email, password, role, phone, address,
+      // Caregiver / User
       isCaregiverAccount, caregiverName,
       age, gender, bloodGroup, govtIdNumber, livingSituation,
+      emergencyContact, medicalCondition, prefersLargeText, needsWheelchair, needsHearingAid,
+      // Volunteer
       govtId, serviceSector, drivingLicense, medicalCertificate, 
-      vehicleDetails, selfieImage,
-      emergencyContact, medicalCondition, prefersLargeText, needsWheelchair, needsHearingAid
+      vehicleDetails, selfieImage
   } = req.body;
 
   try {
+    // 1. Check if user exists
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: 'User already exists' });
 
+    // 2. Hash Password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // 3. Create User
     user = new User({
       name, email, password: hashedPassword, role, phone, address,
       
-      // Admin Panel Logic
+      // Auto-Activate Users, Pend Volunteers
       status: role === 'volunteer' ? 'pending' : 'active', 
 
-      // Personal & Caregiver
+      // Personal Info
       isCaregiverAccount: isCaregiverAccount || false,
       caregiverName: caregiverName || '',
-      age, gender, bloodGroup, govtIdNumber, livingSituation,
+      age: age || '',
+      gender: gender || 'Male',
+      bloodGroup: bloodGroup || '',
+      govtIdNumber: govtIdNumber || '',
+      livingSituation: livingSituation || '',
 
-      // User Prefs
+      // Preferences (Mapping frontend booleans to DB object)
       emergencyContact: emergencyContact || {},
       medicalCondition: medicalCondition || '',
       preferences: {
@@ -42,29 +51,36 @@ router.post('/register', async (req, res) => {
           hearingAid: needsHearingAid || false
       },
 
-      // Volunteer Docs
+      // Volunteer Info (Defaults to empty strings for Users)
       selfieImage: selfieImage || '',
-      serviceSector: serviceSector || 'general',
+      serviceSector: serviceSector || '',
       govtId: govtId || '',
       drivingLicense: drivingLicense || '',
       medicalCertificate: medicalCertificate || '',
       volunteerCertificate: req.body.volunteerCertificate || '',
-      vehicleDetails: vehicleDetails || {},
+      
+      // ✅ FIX: Handle Vehicle Details safely
+      vehicleDetails: vehicleDetails ? {
+          vehicleType: vehicleDetails.type || '',
+          model: vehicleDetails.model || '',
+          number: vehicleDetails.number || ''
+      } : {}
     });
 
     await user.save();
     
+    // 4. Generate Token
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '30d' });
 
     res.status(201).json({ token, user });
 
   } catch (err) { 
-      console.error("Register Error:", err.message);
+      console.error("Register Error:", err.message); // Check terminal for specific error
       res.status(500).json({ message: 'Server Error' }); 
   }
 });
 
-// --- LOGIN ---
+// --- LOGIN ROUTE ---
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -74,8 +90,7 @@ router.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ message: 'Invalid Credentials' });
 
-        // ✅ FIXED STATUS CHECK
-        // Allows login if 'approved' OR 'active'
+        // Status Check for Volunteers
         if (user.role === 'volunteer' && user.status !== 'approved' && user.status !== 'active') {
             return res.status(403).json({ message: 'Account Pending Admin Approval' });
         }
@@ -83,7 +98,6 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '30d' });
         res.json({ token, user });
     } catch (err) { 
-        console.error(err);
         res.status(500).json({ message: 'Server Error' }); 
     }
 });
