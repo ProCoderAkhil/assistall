@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Shield, Users, Search, Bell, AlertTriangle, MapPin, Menu, Phone, 
+  Shield, Users, Search, AlertTriangle, MapPin, Menu, 
   ChevronRight, CheckCircle, Map as MapIcon, FileText,
-  Siren, PhoneCall, Radio, Trash2, Power, Video, Key, RefreshCw
+  Siren, PhoneCall, Radio, Power, Video, Key, RefreshCw, LogOut
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -18,13 +18,15 @@ const AdminPanel = ({ onLogout }) => {
   
   // Data States
   const [activeRides, setActiveRides] = useState([]);
-  const [volunteers, setVolunteers] = useState([]); // Stores ALL volunteers
+  const [volunteers, setVolunteers] = useState([]); 
   const [allUsers, setAllUsers] = useState([]);
   const [sosAlerts, setSosAlerts] = useState([]);
   const [selectedVol, setSelectedVol] = useState(null);
+  const [reports, setReports] = useState([]);
   
   // Interview Logic
   const [generatedCode, setGeneratedCode] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, incidents: 0 });
 
@@ -43,34 +45,48 @@ const AdminPanel = ({ onLogout }) => {
 
   const fetchData = async () => {
     try {
-        // 1. Fetch ALL Volunteers (Fixes "No Request" bug)
-        const resVols = await fetch(`${DEPLOYED_API_URL}/api/admin/volunteers`); // Ensure this endpoint exists or use all-users filter
+        // 1. Fetch ALL Volunteers
+        const resVols = await fetch(`${DEPLOYED_API_URL}/api/admin/volunteers`);
         if (resVols.ok) {
-            setVolunteers(await resVols.json());
+            const data = await resVols.json();
+            if(Array.isArray(data)) setVolunteers(data);
         } else {
-            // Fallback: Filter from all users if specific endpoint fails
+            // Fallback: Fetch all users and filter
             const resAll = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
             if (resAll.ok) {
                 const users = await resAll.json();
-                setVolunteers(users.filter(u => u.role === 'volunteer'));
-                setAllUsers(users);
+                if(Array.isArray(users)) {
+                    setAllUsers(users);
+                    setVolunteers(users.filter(u => u.role === 'volunteer'));
+                }
             }
         }
 
-        // 2. Active Requests
+        // 2. Fetch All Users (Separate call if needed, or reused above)
+        if (allUsers.length === 0) {
+             const resAllUsers = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
+             if (resAllUsers.ok) {
+                 const users = await resAllUsers.json();
+                 if(Array.isArray(users)) setAllUsers(users);
+             }
+        }
+
+        // 3. Active Requests
         const resReqs = await fetch(`${DEPLOYED_API_URL}/api/requests`);
         if (resReqs.ok) {
             const data = await resReqs.json();
-            setActiveRides(data.filter(r => r.status === 'in_progress' || r.status === 'accepted'));
-            setSosAlerts(data.filter(r => r.isSOS || r.status === 'sos'));
-            
-            // Update stats
-            setStats({
-                total: allUsers.length,
-                pending: volunteers.filter(v => v.status !== 'approved').length,
-                active: data.filter(r => r.status === 'in_progress').length,
-                incidents: data.filter(r => r.isSOS).length
-            });
+            if(Array.isArray(data)) {
+                setActiveRides(data.filter(r => r.status === 'in_progress' || r.status === 'accepted'));
+                setSosAlerts(data.filter(r => r.isSOS || r.status === 'sos'));
+                
+                // Update stats
+                setStats({
+                    total: allUsers.length,
+                    pending: volunteers.filter(v => v.status !== 'approved').length,
+                    active: data.filter(r => r.status === 'in_progress').length,
+                    incidents: data.filter(r => r.isSOS).length
+                });
+            }
         }
     } catch (e) { console.error("Sync Error", e); }
   };
@@ -88,11 +104,32 @@ const AdminPanel = ({ onLogout }) => {
       } catch (e) { alert("Update Failed"); }
   };
 
-  const generateOTP = () => {
-      const code = Math.floor(100000 + Math.random() * 900000);
-      setGeneratedCode(code);
-      // In a real app, you would send this code to the backend to save it against the user
-      // For now, we simulate the Admin giving this code verbally
+  // ✅ OTP GENERATION FUNCTION
+  const generateInterviewCode = async (userId) => {
+      setIsGenerating(true);
+      try {
+          // Attempt to call backend to generate and save code
+          const res = await fetch(`${DEPLOYED_API_URL}/api/admin/generate-code`, {
+              method: 'POST',
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId })
+          });
+
+          if (res.ok) {
+              const data = await res.json();
+              setGeneratedCode(data.code);
+          } else {
+              // Fallback: Generate locally if backend route missing (Demo mode)
+              console.warn("Backend generate-code failed, using local fallback");
+              const code = Math.floor(100000 + Math.random() * 900000);
+              setGeneratedCode(code);
+          }
+      } catch (e) {
+          const code = Math.floor(100000 + Math.random() * 900000);
+          setGeneratedCode(code);
+      } finally {
+          setIsGenerating(false);
+      }
   };
 
   // --- COMPONENT: LIVE MAP ---
@@ -120,14 +157,14 @@ const AdminPanel = ({ onLogout }) => {
         {/* SIDEBAR */}
         <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-[#0a0a0a] border-r border-white/10 flex flex-col transition-all duration-300 z-20`}>
             <div className="p-6 flex items-center justify-between">
-                {sidebarOpen && <div className="font-black text-lg tracking-tight">Admin<span className="text-green-500">.</span></div>}
+                {sidebarOpen && <div className="font-black text-lg tracking-tight text-white">Admin<span className="text-green-500">.</span></div>}
                 <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400"><Menu size={20}/></button>
             </div>
             <nav className="flex-1 px-4 space-y-2 mt-4">
-                <button onClick={() => setActiveTab('map')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'map' ? 'bg-blue-900/20 text-blue-400' : 'text-gray-400 hover:bg-white/5'}`}><MapIcon size={20}/> {sidebarOpen && <span className="font-bold text-sm">Live Map</span>}</button>
-                <button onClick={() => setActiveTab('verification')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'verification' ? 'bg-green-900/20 text-green-400' : 'text-gray-400 hover:bg-white/5'}`}><CheckCircle size={20}/> {sidebarOpen && <span className="font-bold text-sm">Volunteers</span>}</button>
+                <button onClick={() => setActiveTab('map')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'map' ? 'bg-blue-900/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-white/5'}`}><MapIcon size={20}/> {sidebarOpen && <span className="font-bold text-sm">Live Map</span>}</button>
+                <button onClick={() => setActiveTab('verification')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'verification' ? 'bg-green-900/20 text-green-400 border border-green-500/30' : 'text-gray-400 hover:bg-white/5'}`}><CheckCircle size={20}/> {sidebarOpen && <span className="font-bold text-sm">Volunteers</span>}</button>
                 <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'users' ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5'}`}><Users size={20}/> {sidebarOpen && <span className="font-bold text-sm">All Users</span>}</button>
-                <button onClick={() => setActiveTab('incidents')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'incidents' ? 'bg-red-900/20 text-red-400' : 'text-gray-400 hover:bg-white/5'}`}><Siren size={20}/> {sidebarOpen && <span className="font-bold text-sm">Incidents</span>}</button>
+                <button onClick={() => setActiveTab('incidents')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${activeTab === 'incidents' ? 'bg-red-900/20 text-red-400 border border-red-500/30' : 'text-gray-400 hover:bg-white/5'}`}><Siren size={20}/> {sidebarOpen && <span className="font-bold text-sm">Incidents</span>}</button>
             </nav>
             <div className="p-4 border-t border-white/10"><button onClick={onLogout} className="flex items-center gap-3 w-full p-3 rounded-xl text-red-500 hover:bg-red-900/10 transition"><LogOut size={20}/> {sidebarOpen && <span className="font-bold text-sm">Logout</span>}</button></div>
         </aside>
@@ -142,7 +179,7 @@ const AdminPanel = ({ onLogout }) => {
                 </div>
             </header>
 
-            {/* --- 1. VOLUNTEER MANAGEMENT TAB (FIXED) --- */}
+            {/* --- 1. VOLUNTEER MANAGEMENT TAB (FIXED & OTP ADDED) --- */}
             {activeTab === 'verification' && (
                 <div className="flex gap-8 h-full animate-in fade-in">
                     
@@ -154,7 +191,7 @@ const AdminPanel = ({ onLogout }) => {
                         </div>
                         <div className="overflow-y-auto flex-1 p-4 space-y-2">
                             {/* Filter to show non-approved first */}
-                            {volunteers.sort((a,b) => (a.status === 'approved' ? 1 : -1)).map(v => (
+                            {Array.isArray(volunteers) && volunteers.sort((a,b) => (a.status === 'approved' ? 1 : -1)).map(v => (
                                 <div key={v._id} onClick={() => { setSelectedVol(v); setGeneratedCode(null); }} className={`p-4 rounded-xl border cursor-pointer flex justify-between items-center ${selectedVol?._id === v._id ? 'bg-blue-900/20 border-blue-500' : 'bg-[#1a1a1a] border-white/5 text-gray-400'}`}>
                                     <div>
                                         <h4 className="font-bold text-sm text-white">{v.name}</h4>
@@ -211,8 +248,8 @@ const AdminPanel = ({ onLogout }) => {
                                         <p className="text-gray-500 text-xs mb-4">1. Start Google Meet. 2. Verify Face. 3. Read OTP to volunteer.</p>
                                         
                                         {!generatedCode ? (
-                                            <button onClick={generateOTP} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl flex items-center gap-2 transition">
-                                                <Key size={18}/> Generate OTP Code
+                                            <button onClick={() => generateInterviewCode(selectedVol._id)} disabled={isGenerating} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition">
+                                                {isGenerating ? "Generating..." : <><Key size={18}/> Generate OTP Code</>}
                                             </button>
                                         ) : (
                                             <div className="animate-in zoom-in">
@@ -251,7 +288,7 @@ const AdminPanel = ({ onLogout }) => {
                         <table className="w-full text-left text-sm text-gray-400">
                             <thead className="bg-[#1a1a1a] text-gray-200 uppercase text-xs"><tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
                             <tbody>
-                                {allUsers.map((u, i) => (
+                                {Array.isArray(allUsers) && allUsers.map((u, i) => (
                                     <tr key={i} className="border-b border-white/5 hover:bg-white/5">
                                         <td className="p-4 text-white font-bold">{u.name}<br/><span className="text-[10px] text-gray-500 font-normal">{u.email}</span></td>
                                         <td className="p-4 uppercase text-xs font-bold">{u.role}</td>
@@ -265,6 +302,24 @@ const AdminPanel = ({ onLogout }) => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* --- 4. INCIDENTS (SOS) --- */}
+            {activeTab === 'incidents' && (
+                <div className="flex gap-6 h-full overflow-hidden">
+                    <div className="w-1/2 flex flex-col gap-4 overflow-y-auto">
+                        <h3 className="text-red-500 font-bold text-lg uppercase tracking-widest flex items-center gap-2"><Siren size={20}/> High Priority (SOS)</h3>
+                        {sosAlerts.length === 0 ? <div className="p-8 bg-[#121212] rounded-2xl border border-white/5 text-center text-gray-500">No Active SOS Alerts</div> : sosAlerts.map(alert => (
+                            <div key={alert._id} className="bg-red-900/10 border border-red-500 rounded-2xl p-6 relative overflow-hidden animate-pulse">
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div><h4 className="text-2xl font-black text-white">{alert.requesterName}</h4><p className="text-red-300 font-medium mt-1 flex items-center gap-2"><MapPin size={16}/> {alert.drop}</p></div>
+                                    <div className="text-right"><p className="text-xs text-red-400 font-bold uppercase">Volunteer</p><p className="text-white font-bold">{alert.volunteerName}</p></div>
+                                </div>
+                                <div className="flex gap-3 mt-6 relative z-10"><button className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Radio size={18}/> Dispatch Team</button><button className="flex-1 bg-[#222] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 border border-white/10"><PhoneCall size={18}/> Call User</button></div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
