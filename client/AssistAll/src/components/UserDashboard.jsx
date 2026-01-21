@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Menu, Bell, CheckCircle, Navigation, Star, Phone, Shield, Share2, 
-    MessageSquare, Loader2, X
+    MessageSquare, Loader2, X, CreditCard, Banknote, ShieldCheck, Footprints
 } from 'lucide-react';
 import ServiceSelector from './ServiceSelector';
 import { useToast } from './ToastContext';
@@ -76,6 +76,7 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
     const [feedback, setFeedback] = useState('');
     const [selectedTip, setSelectedTip] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [paymentMode, setPaymentMode] = useState('online');
 
     const handleFinalSubmit = async (method) => {
         setLoading(true);
@@ -91,6 +92,10 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
         finally { setLoading(false); }
     };
 
+    const handleCashPayment = () => { setLoading(true); addToast(`Please give ₹${selectedTip} cash to the volunteer.`, "info"); setTimeout(() => { handleFinalSubmit('cash'); }, 2000); };
+    const handleOnlinePayment = () => { handleFinalSubmit('online'); };
+    const submitReviewOnly = () => { handleFinalSubmit('none'); };
+
     return (
         <div className="fixed inset-0 z-[6000] bg-white flex flex-col items-center justify-center p-6 animate-in zoom-in font-sans">
             <div className="text-center mb-6"><div className="mx-auto bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mb-4"><CheckCircle size={40} className="text-green-600" /></div><h2 className="text-3xl font-black text-gray-900">Ride Completed!</h2><p className="text-gray-500 mt-2 font-medium">How was {requestData?.volunteerName}?</p></div>
@@ -98,7 +103,8 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
             <div className="w-full max-w-sm mb-6 relative"><MessageSquare className="absolute left-4 top-4 text-gray-400" size={18} /><textarea className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 pl-12 text-sm focus:outline-none focus:border-green-500 resize-none text-gray-700" rows="2" placeholder="Write a review..." value={feedback} onChange={(e) => setFeedback(e.target.value)}/></div>
             <p className="font-bold text-gray-700 mb-3 text-center text-xs uppercase tracking-wide">Add a Tip</p>
             <div className="grid grid-cols-4 gap-3 mb-6 w-full max-w-sm">{[0, 20, 50, 100].map(amt => (<button key={amt} onClick={() => setSelectedTip(amt)} className={`py-3 rounded-xl font-bold border transition ${selectedTip === amt ? 'bg-black text-white' : 'bg-gray-50 text-gray-700'}`}>{amt === 0 ? "No" : `₹${amt}`}</button>))}</div>
-            <button onClick={() => handleFinalSubmit('online')} disabled={loading} className="w-full max-w-sm bg-black text-white font-bold py-4 rounded-2xl mb-3 hover:bg-gray-800 shadow-lg active:scale-95 flex items-center justify-center">{loading ? <Loader2 className="animate-spin"/> : "Submit Review"}</button>
+            {selectedTip > 0 && <div className="bg-blue-50 p-4 rounded-xl mb-6 w-full max-w-sm border border-blue-100"><p className="text-xs font-bold text-blue-600 uppercase mb-3 flex items-center"><ShieldCheck size={14} className="mr-1"/> Payment Method</p><div className="flex gap-3"><button onClick={() => setPaymentMode('online')} className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition ${paymentMode === 'online' ? 'border-blue-600 bg-white text-blue-700' : 'border-transparent bg-blue-100/50 text-gray-500'}`}><CreditCard size={24} className="mb-1"/><span className="text-xs font-bold">Online</span></button><button onClick={() => setPaymentMode('cash')} className={`flex-1 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition ${paymentMode === 'cash' ? 'border-green-600 bg-white text-green-700' : 'border-transparent bg-green-100/50 text-gray-500'}`}><Banknote size={24} className="mb-1"/><span className="text-xs font-bold">Cash</span></button></div></div>}
+            {selectedTip > 0 ? <button onClick={paymentMode === 'online' ? handleOnlinePayment : handleCashPayment} disabled={loading} className={`w-full max-w-sm text-white font-bold py-4 rounded-2xl mb-3 transition flex items-center justify-center shadow-lg active:scale-95 ${paymentMode === 'online' ? 'bg-[#3395ff]' : 'bg-green-600'}`}>{loading ? <Loader2 className="animate-spin"/> : paymentMode === 'online' ? `Pay ₹${selectedTip}` : `Confirm Cash Payment`}</button> : <button onClick={submitReviewOnly} disabled={loading} className="w-full max-w-sm bg-black text-white font-bold py-4 rounded-2xl mb-3 hover:bg-gray-800 shadow-lg active:scale-95 flex items-center justify-center">{loading ? <Loader2 className="animate-spin"/> : "Submit Review"}</button>}
             <button onClick={onSkip} className="text-gray-400 font-bold text-sm">Skip Feedback</button>
         </div>
     );
@@ -135,11 +141,10 @@ const UserDashboard = () => {
         try { const res = await fetch(`${API_BASE}/api/auth/user/${volunteerId}`); if (res.ok) setVolunteerDetails(await res.json()); } catch (e) {}
     };
 
-    // ✅ FIXED POLLING LOGIC - DATA DRIVEN UI
+    // ✅ FIXED POLLING LOGIC
     useEffect(() => {
         if (!rideIdToPoll) {
-            // Only reset to menu if we are NOT in completed state (to preserve rating screen)
-            if (viewState !== 'completed' && !activeRide) setViewState('menu');
+            if (viewState !== 'completed') setViewState('menu');
             return;
         }
 
@@ -147,29 +152,39 @@ const UserDashboard = () => {
 
         const pollInterval = setInterval(async () => {
             try {
+                // IMPORTANT: Stop polling if we are already in the "completed" / rating state
+                if (viewState === 'completed') return;
+
                 const res = await fetch(`${API_BASE}/api/requests?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
                     const myRide = data.find(r => r._id === rideIdToPoll);
 
                     if (myRide) {
-                        setActiveRide(myRide); // Always update state
+                        setActiveRide(myRide);
 
-                        // 1. DATA-DRIVEN: FORCE COMPLETE
+                        // 1. RIDE COMPLETED (Switch View, but DO NOT clear storage yet)
                         if (myRide.status === 'completed') {
-                            setViewState('completed'); 
-                            return; // Stop processing other states
+                            setViewState('completed');
+                            addToast("Ride Completed", "success");
+                            return; 
                         }
 
                         // 2. ACCEPTED
                         if (myRide.status === 'accepted') {
-                            if (viewState !== 'active_ride') setViewState('active_ride');
+                            if (viewState !== 'active_ride') {
+                                addToast("Volunteer Found!", "success");
+                                setViewState('active_ride');
+                            }
                             setVolunteerDetails(prev => { if(!prev) fetchVolunteerDetails(myRide.volunteerId); return prev; });
                         } 
                         
                         // 3. IN PROGRESS
                         else if (myRide.status === 'in_progress') {
-                            if (viewState !== 'active_ride') setViewState('active_ride');
+                            if (viewState !== 'active_ride') {
+                                addToast("Ride In Progress", "info");
+                                setViewState('active_ride');
+                            }
                         }
                     }
                 }
@@ -177,8 +192,9 @@ const UserDashboard = () => {
         }, 3000);
 
         return () => clearInterval(pollInterval);
-    }, [rideIdToPoll, viewState, addToast, activeRide]);
+    }, [rideIdToPoll, viewState, addToast]);
 
+    // ✅ Cleanup is only called AFTER feedback is submitted
     const handleRatingComplete = () => {
         localStorage.removeItem('activeRideId');
         setRideIdToPoll(null);
@@ -195,9 +211,8 @@ const UserDashboard = () => {
         addToast("Request Cancelled", "info");
     };
 
-    // ✅ RENDER LOGIC PRIORITY
-    // If status is completed, FORCE the Rating Screen, regardless of other states.
-    if (activeRide?.status === 'completed') {
+    // ✅ RENDER PRIORITY: If completed, show Rate Screen immediately
+    if (viewState === 'completed') {
         return <RateAndTip requestData={activeRide} onSkip={handleRatingComplete} onSubmit={handleRatingComplete} />;
     }
 
@@ -218,6 +233,10 @@ const UserDashboard = () => {
             </div>
 
             {activeRide && <StatusBanner status={activeRide.status} />}
+
+            {viewState === 'menu' && (
+                <button className="absolute top-24 right-4 z-[35] bg-[#1a1a1a]/90 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-xl flex flex-col items-center gap-1 text-white hover:bg-blue-600 transition"><Footprints size={20} className="text-blue-400"/><span className="text-[9px] font-bold uppercase">Walk</span></button>
+            )}
 
             {viewState === 'menu' && <ServiceSelector onFindClick={handleRequest} />}
             
