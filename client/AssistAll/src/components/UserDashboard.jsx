@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Menu, Bell, CheckCircle, Navigation, Star, Phone, Shield, Share2, 
-    MessageSquare, Loader2, X, CreditCard, Banknote, ShieldCheck, Footprints
+    MessageSquare, Loader2, X, CreditCard, Banknote, ShieldCheck, Footprints, Key
 } from 'lucide-react';
 import ServiceSelector from './ServiceSelector';
 import { useToast } from './ToastContext';
@@ -47,13 +47,35 @@ const FindingVolunteer = ({ requestId, onCancel }) => {
     );
 };
 
+// ✅ FIXED: Now shows the Pickup OTP
 const ArrivingView = ({ rideData, onViewProfile }) => (
     <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#121212] border border-white/10 p-6 rounded-[32px] shadow-2xl text-white animate-in slide-in-from-bottom">
         <div className="flex justify-between items-start mb-6 mt-2">
-            <div><h3 className="text-gray-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-1"><Shield size={12}/> VERIFIED PARTNER</h3><h2 className="text-3xl font-black tracking-tight">{rideData?.volunteerName}</h2><div className="flex items-center gap-3 mt-2"><div className="bg-white/10 px-3 py-1 rounded-full text-xs font-bold text-white border border-white/10">Maruti Swift • White</div><div className="text-green-400 font-bold text-lg">₹{rideData?.price}</div></div></div>
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full border-2 border-white/20 flex items-center justify-center shadow-lg cursor-pointer hover:scale-105 transition" onClick={onViewProfile}><span className="text-2xl font-bold">{rideData?.volunteerName?.charAt(0)}</span></div>
+            <div>
+                <h3 className="text-gray-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-1"><Shield size={12}/> VERIFIED PARTNER</h3>
+                <h2 className="text-3xl font-black tracking-tight">{rideData?.volunteerName}</h2>
+                <div className="flex items-center gap-3 mt-2">
+                    <div className="bg-white/10 px-3 py-1 rounded-full text-xs font-bold text-white border border-white/10">Maruti Swift • White</div>
+                    <div className="text-green-400 font-bold text-lg">₹{rideData?.price}</div>
+                </div>
+            </div>
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full border-2 border-white/20 flex items-center justify-center shadow-lg cursor-pointer hover:scale-105 transition" onClick={onViewProfile}>
+                <span className="text-2xl font-bold">{rideData?.volunteerName?.charAt(0)}</span>
+            </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-4"><button className="bg-green-600 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2"><Phone size={20}/> Call</button><button className="bg-[#222] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2"><Navigation size={20}/> Message</button></div>
+
+        {/* ✅ OTP DISPLAY SECTION */}
+        <div className="bg-[#222] border border-white/10 p-4 rounded-2xl mb-4 text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><Key size={12}/> Start Code</p>
+            <p className="text-4xl font-mono font-black text-white tracking-[0.3em]">{rideData?.pickupOTP || "----"}</p>
+            <p className="text-[10px] text-gray-500 mt-1">Share this code with volunteer to start ride</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+            <button className="bg-green-600 text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-green-500 transition"><Phone size={20}/> Call</button>
+            <button className="bg-[#222] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-[#333] transition"><Navigation size={20}/> Message</button>
+        </div>
         <button onClick={onViewProfile} className="w-full py-3 text-sm font-bold text-gray-400 hover:text-white transition border-t border-white/5">View Full Volunteer Profile</button>
     </div>
 );
@@ -113,7 +135,7 @@ const RateAndTip = ({ requestData, onSkip, onSubmit }) => {
 };
 
 // ==========================================
-// 2. MAIN CONTROLLER (FIXED LOGIC)
+// 2. MAIN CONTROLLER
 // ==========================================
 
 const UserDashboard = () => {
@@ -143,7 +165,6 @@ const UserDashboard = () => {
         try { const res = await fetch(`${API_BASE}/api/auth/user/${volunteerId}`); if (res.ok) setVolunteerDetails(await res.json()); } catch (e) {}
     };
 
-    // ✅ FIXED POLLING & STATE LOGIC
     useEffect(() => {
         if (!rideIdToPoll) {
             if (viewState !== 'completed' && !activeRide) setViewState('menu');
@@ -154,31 +175,29 @@ const UserDashboard = () => {
 
         const pollInterval = setInterval(async () => {
             try {
+                if (viewState === 'completed') return;
+
                 const res = await fetch(`${API_BASE}/api/requests?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
                     const myRide = data.find(r => r._id === rideIdToPoll);
 
                     if (myRide) {
-                        setActiveRide(myRide); // Always update state with latest data
+                        setActiveRide(myRide);
 
-                        // 1. FORCE COMPLETE - CRITICAL FIX
-                        // If backend says completed, we MUST switch to completed view immediately
                         if (myRide.status === 'completed') {
-                            if (viewState !== 'completed') {
-                                setViewState('completed');
-                                addToast("Ride Completed", "success");
-                            }
-                            // Do not return here, let state update naturally, but UI handles priority below
+                            setViewState('completed');
+                            addToast("Ride Completed", "success");
+                            return; 
                         }
-                        
-                        // 2. ACCEPTED
-                        else if (myRide.status === 'accepted') {
-                            if (viewState !== 'active_ride') setViewState('active_ride');
+
+                        if (myRide.status === 'accepted') {
+                            if (viewState !== 'active_ride') {
+                                setViewState('active_ride');
+                                addToast("Volunteer Found!", "success");
+                            }
                             setVolunteerDetails(prev => { if(!prev) fetchVolunteerDetails(myRide.volunteerId); return prev; });
                         } 
-                        
-                        // 3. IN PROGRESS
                         else if (myRide.status === 'in_progress') {
                             if (viewState !== 'active_ride') setViewState('active_ride');
                         }
@@ -206,8 +225,7 @@ const UserDashboard = () => {
         addToast("Request Cancelled", "info");
     };
 
-    // ✅ RENDER PRIORITY: FORCE Rating Screen if status is 'completed'
-    // This overrides any 'On Trip' view state if the data says the ride is done.
+    // ✅ FORCE RATING VIEW IF COMPLETED
     if (activeRide?.status === 'completed') {
         return <RateAndTip requestData={activeRide} onSkip={handleRatingComplete} onSubmit={handleRatingComplete} />;
     }
@@ -215,12 +233,10 @@ const UserDashboard = () => {
     return (
         <div className="h-screen bg-neutral-100 text-black font-sans flex flex-col relative overflow-hidden">
             
-            {/* Map Background */}
             <div className="absolute inset-0 z-0">
                 <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src="https://www.openstreetmap.org/export/embed.html?bbox=76.51%2C9.58%2C76.54%2C9.60&layer=mapnik&marker=9.59%2C76.52" style={{ filter: 'grayscale(100%) invert(90%) contrast(120%)' }}></iframe>
             </div>
 
-            {/* Header */}
             <div className="absolute top-0 w-full z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
                 <button onClick={handleCancelRequest} className="p-3 bg-neutral-800/80 rounded-full text-white backdrop-blur-md border border-white/10 hover:bg-neutral-700 transition"><Menu size={20}/></button>
                 <div className="flex items-center gap-2 px-4 py-2 bg-neutral-800/80 rounded-full border border-neutral-700 text-white backdrop-blur-md">
@@ -245,7 +261,6 @@ const UserDashboard = () => {
                 </>
             )}
 
-            {/* Only show ride in progress if status matches */}
             {viewState === 'active_ride' && activeRide?.status === 'in_progress' && (
                 <RideInProgress requestData={activeRide} />
             )}
