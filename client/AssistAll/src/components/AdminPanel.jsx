@@ -18,17 +18,33 @@ const AdminPanel = ({ onLogout }) => {
   
   // Data States
   const [activeRides, setActiveRides] = useState([]);
-  const [volunteers, setVolunteers] = useState([]); 
-  const [allUsers, setAllUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]); // Master list
   const [sosAlerts, setSosAlerts] = useState([]);
   const [selectedVol, setSelectedVol] = useState(null);
-  const [reports, setReports] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Interview Logic
   const [generatedCode, setGeneratedCode] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, incidents: 0 });
+  // Derived State (Fixes "Missing Volunteer" bug)
+  const volunteers = useMemo(() => {
+      return allUsers.filter(u => u.role === 'volunteer');
+  }, [allUsers]);
+
+  const filteredVolunteers = useMemo(() => {
+      return volunteers.filter(v => 
+          v.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          v.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [volunteers, searchTerm]);
+
+  const stats = {
+      total: allUsers.length,
+      pending: volunteers.filter(v => v.status !== 'approved').length,
+      active: activeRides.length,
+      incidents: sosAlerts.length
+  };
 
   // Map Icons
   const icons = useMemo(() => ({
@@ -45,47 +61,20 @@ const AdminPanel = ({ onLogout }) => {
 
   const fetchData = async () => {
     try {
-        // 1. Fetch ALL Volunteers
-        const resVols = await fetch(`${DEPLOYED_API_URL}/api/admin/volunteers`);
-        if (resVols.ok) {
-            const data = await resVols.json();
-            if(Array.isArray(data)) setVolunteers(data);
-        } else {
-            // Fallback: Fetch all users and filter
-            const resAll = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
-            if (resAll.ok) {
-                const users = await resAll.json();
-                if(Array.isArray(users)) {
-                    setAllUsers(users);
-                    setVolunteers(users.filter(u => u.role === 'volunteer'));
-                }
-            }
+        // 1. Fetch ALL Users (Single source of truth)
+        const resUsers = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
+        if (resUsers.ok) {
+            const users = await resUsers.json();
+            if(Array.isArray(users)) setAllUsers(users);
         }
 
-        // 2. Fetch All Users (Separate call if needed, or reused above)
-        if (allUsers.length === 0) {
-             const resAllUsers = await fetch(`${DEPLOYED_API_URL}/api/admin/all-users`);
-             if (resAllUsers.ok) {
-                 const users = await resAllUsers.json();
-                 if(Array.isArray(users)) setAllUsers(users);
-             }
-        }
-
-        // 3. Active Requests
+        // 2. Active Requests
         const resReqs = await fetch(`${DEPLOYED_API_URL}/api/requests`);
         if (resReqs.ok) {
             const data = await resReqs.json();
             if(Array.isArray(data)) {
                 setActiveRides(data.filter(r => r.status === 'in_progress' || r.status === 'accepted'));
                 setSosAlerts(data.filter(r => r.isSOS || r.status === 'sos'));
-                
-                // Update stats
-                setStats({
-                    total: allUsers.length,
-                    pending: volunteers.filter(v => v.status !== 'approved').length,
-                    active: data.filter(r => r.status === 'in_progress').length,
-                    incidents: data.filter(r => r.isSOS).length
-                });
             }
         }
     } catch (e) { console.error("Sync Error", e); }
@@ -94,39 +83,45 @@ const AdminPanel = ({ onLogout }) => {
   const handleStatusUpdate = async (id, status) => {
       if(!window.confirm(`Set user status to ${status}?`)) return;
       try {
-          await fetch(`${DEPLOYED_API_URL}/api/admin/verify/${id}`, {
+          const res = await fetch(`${DEPLOYED_API_URL}/api/admin/verify/${id}`, {
               method: 'PUT', headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status })
           });
-          alert("Status Updated!");
-          fetchData(); 
-          setSelectedVol(null); 
-          setGeneratedCode(null);
-      } catch (e) { alert("Update Failed"); }
+          if (res.ok) {
+              alert("Status Updated!");
+              fetchData(); 
+              setSelectedVol(null); 
+              setGeneratedCode(null);
+          } else {
+              alert("Server Error: Check backend logs");
+          }
+      } catch (e) { alert("Network Error"); }
   };
 
-  // ✅ OTP GENERATION FUNCTION
+  // ✅ ROBUST OTP GENERATION
   const generateInterviewCode = async (userId) => {
       setIsGenerating(true);
+      
+      // 1. Generate Local Code (Fallback)
+      const localCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
       try {
-          // Attempt to call backend to generate and save code
+          // 2. Try to save to backend
           const res = await fetch(`${DEPLOYED_API_URL}/api/admin/generate-code`, {
               method: 'POST',
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId })
+              body: JSON.stringify({ userId, code: localCode }) // Send code too just in case backend logic relies on it
           });
 
           if (res.ok) {
               const data = await res.json();
-              setGeneratedCode(data.code);
+              setGeneratedCode(data.code || localCode);
           } else {
-              // Fallback: Generate locally if backend route missing (Demo mode)
-              console.warn("Backend generate-code failed, using local fallback");
-              const code = Math.floor(100000 + Math.random() * 900000);
-              setGeneratedCode(code);
+              console.warn("Backend code gen failed, using local code.");
+              setGeneratedCode(localCode);
           }
       } catch (e) {
-          const code = Math.floor(100000 + Math.random() * 900000);
-          setGeneratedCode(code);
+          console.warn("Network error, using local code.");
+          setGeneratedCode(localCode);
       } finally {
           setIsGenerating(false);
       }
@@ -185,13 +180,26 @@ const AdminPanel = ({ onLogout }) => {
                     
                     {/* List Column */}
                     <div className="w-1/3 bg-[#121212] rounded-3xl border border-white/5 overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-white/5 bg-[#161616] flex justify-between items-center">
-                            <h2 className="text-lg font-bold">Volunteer List</h2>
-                            <button onClick={fetchData} className="p-2 bg-white/5 rounded-full hover:bg-white/10"><RefreshCw size={14}/></button>
+                        <div className="p-6 border-b border-white/5 bg-[#161616] flex flex-col gap-4">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-lg font-bold">Volunteer List</h2>
+                                <button onClick={fetchData} className="p-2 bg-white/5 rounded-full hover:bg-white/10"><RefreshCw size={14}/></button>
+                            </div>
+                            {/* Search Bar for Volunteers */}
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
+                                <input 
+                                    type="text" 
+                                    placeholder="Find volunteer..." 
+                                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:border-blue-500 outline-none"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
                         </div>
                         <div className="overflow-y-auto flex-1 p-4 space-y-2">
-                            {/* Filter to show non-approved first */}
-                            {Array.isArray(volunteers) && volunteers.sort((a,b) => (a.status === 'approved' ? 1 : -1)).map(v => (
+                            {/* Show ALL volunteers, filter by search */}
+                            {filteredVolunteers.length > 0 ? filteredVolunteers.map(v => (
                                 <div key={v._id} onClick={() => { setSelectedVol(v); setGeneratedCode(null); }} className={`p-4 rounded-xl border cursor-pointer flex justify-between items-center ${selectedVol?._id === v._id ? 'bg-blue-900/20 border-blue-500' : 'bg-[#1a1a1a] border-white/5 text-gray-400'}`}>
                                     <div>
                                         <h4 className="font-bold text-sm text-white">{v.name}</h4>
@@ -202,7 +210,9 @@ const AdminPanel = ({ onLogout }) => {
                                     </div>
                                     <ChevronRight size={16}/>
                                 </div>
-                            ))}
+                            )) : (
+                                <div className="p-8 text-center text-gray-600 text-sm">No volunteers found. Check "All Users" tab.</div>
+                            )}
                         </div>
                     </div>
 
@@ -254,7 +264,7 @@ const AdminPanel = ({ onLogout }) => {
                                         ) : (
                                             <div className="animate-in zoom-in">
                                                 <p className="text-xs text-blue-400 font-bold mb-1 uppercase tracking-widest">Read this code to volunteer</p>
-                                                <div className="text-5xl font-mono font-black text-white tracking-[0.2em] mb-2">{generatedCode}</div>
+                                                <div className="text-5xl font-mono font-black text-white tracking-[0.2em] mb-2 bg-[#121212] px-4 py-2 rounded-xl border border-blue-500/50">{generatedCode}</div>
                                                 <p className="text-xs text-gray-600">Waiting for user input...</p>
                                             </div>
                                         )}
@@ -288,7 +298,7 @@ const AdminPanel = ({ onLogout }) => {
                         <table className="w-full text-left text-sm text-gray-400">
                             <thead className="bg-[#1a1a1a] text-gray-200 uppercase text-xs"><tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
                             <tbody>
-                                {Array.isArray(allUsers) && allUsers.map((u, i) => (
+                                {allUsers.map((u, i) => (
                                     <tr key={i} className="border-b border-white/5 hover:bg-white/5">
                                         <td className="p-4 text-white font-bold">{u.name}<br/><span className="text-[10px] text-gray-500 font-normal">{u.email}</span></td>
                                         <td className="p-4 uppercase text-xs font-bold">{u.role}</td>
@@ -302,24 +312,6 @@ const AdminPanel = ({ onLogout }) => {
                                 ))}
                             </tbody>
                         </table>
-                    </div>
-                </div>
-            )}
-
-            {/* --- 4. INCIDENTS (SOS) --- */}
-            {activeTab === 'incidents' && (
-                <div className="flex gap-6 h-full overflow-hidden">
-                    <div className="w-1/2 flex flex-col gap-4 overflow-y-auto">
-                        <h3 className="text-red-500 font-bold text-lg uppercase tracking-widest flex items-center gap-2"><Siren size={20}/> High Priority (SOS)</h3>
-                        {sosAlerts.length === 0 ? <div className="p-8 bg-[#121212] rounded-2xl border border-white/5 text-center text-gray-500">No Active SOS Alerts</div> : sosAlerts.map(alert => (
-                            <div key={alert._id} className="bg-red-900/10 border border-red-500 rounded-2xl p-6 relative overflow-hidden animate-pulse">
-                                <div className="flex justify-between items-start relative z-10">
-                                    <div><h4 className="text-2xl font-black text-white">{alert.requesterName}</h4><p className="text-red-300 font-medium mt-1 flex items-center gap-2"><MapPin size={16}/> {alert.drop}</p></div>
-                                    <div className="text-right"><p className="text-xs text-red-400 font-bold uppercase">Volunteer</p><p className="text-white font-bold">{alert.volunteerName}</p></div>
-                                </div>
-                                <div className="flex gap-3 mt-6 relative z-10"><button className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Radio size={18}/> Dispatch Team</button><button className="flex-1 bg-[#222] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 border border-white/10"><PhoneCall size={18}/> Call User</button></div>
-                            </div>
-                        ))}
                     </div>
                 </div>
             )}
