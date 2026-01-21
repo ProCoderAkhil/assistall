@@ -3,30 +3,27 @@ const mongoose = require('mongoose');
 const RequestSchema = new mongoose.Schema({
   requesterName: { type: String, required: true },
   requesterId: { type: String, required: true },
-  volunteerId: { type: String }, 
   volunteerName: { type: String },
+  volunteerId: { type: String },
   
-  type: { type: String, required: true }, // Transport, Medicine, etc.
-  status: { 
-      type: String, 
-      enum: ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'], 
-      default: 'pending' 
-  },
+  type: { type: String, default: 'Ride' },
+  status: { type: String, enum: ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'], default: 'pending' },
   
-  location: {
-      lat: { type: Number },
-      lng: { type: Number }
-  },
-  drop: { type: String },
-  price: { type: Number, default: 150 },
+  pickup: { type: String, required: true },
+  drop: { type: String, required: true },
+  price: { type: Number, default: 0 },
   
-  // ✅ NEW: OTP Field
-  pickupOTP: { type: String },
+  // ✅ FIX: This field was missing, preventing the OTP from being saved
+  pickupOTP: { type: String }, 
 
-  isScheduled: { type: Boolean, default: false },
-  scheduledTime: { type: String },
-  
-  createdAt: { type: Date, default: Date.now }
+  // Rating & Payment
+  rating: { type: Number },
+  review: { type: String },
+  tip: { type: Number, default: 0 },
+  paymentMethod: { type: String },
+
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('Request', RequestSchema);
